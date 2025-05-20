@@ -1,5 +1,6 @@
 import SwiftUI
 import MediaPlayer
+import Combine
 
 struct SongListView: View {
     @ObservedObject var viewModel: SongListViewModel
@@ -38,7 +39,8 @@ struct SongListView: View {
 
 struct SongRowView: View {
     let song: Song
-    @State private var artwork: UIImage?
+    @State private var image: UIImage?
+    private var cancellable: Cancellable?
     
     var body: some View {
         HStack(spacing: 12) {
@@ -115,5 +117,21 @@ struct ArtworkView: View {
         if let artwork = artwork {
             image = artwork.image(at: CGSize(width: size, height: size))
         }
+    }
+}
+
+// Preview extension
+extension SongListView {
+    static func preview() -> some View {
+        let mockSongs = ContentView_Previews.createMockSongs()
+        let container = DIContainer.preview(withMockSongs: mockSongs)
+        let viewModel = SongListViewModel(
+            musicLibraryService: container.musicLibraryService,
+            logger: container.logger
+        )
+        viewModel.songs = mockSongs
+        
+        return SongListView(viewModel: viewModel)
+            .previewWithContainer(container)
     }
 }
