@@ -276,20 +276,3 @@ struct CaptionText: View {
             .foregroundColor(AppColors.secondaryText)
     }
 }
-
-// MARK: - Card Style
-struct CardStyle: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(AppSpacing.medium)
-            .background(AppColors.background)
-            .cornerRadius(AppRadius.medium)
-            .appShadow(AppShadow.small)
-    }
-}
-
-extension View {
-    func cardStyle() -> some View {
-        self.modifier(CardStyle())
-    }
-}
