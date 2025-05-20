@@ -2,13 +2,45 @@ import SwiftUI
 import MediaPlayer
 import Combine
 
+struct SongRowView: View {
+    let song: Song
+    let index: Int
+    @State private var image: UIImage?
+    
+    var body: some View {
+        HStack(spacing: AppSpacing.small) {
+            ArtworkView(artwork: song.artwork, size: 50)
+                .cornerRadius(AppRadius.small)
+            
+            Text("\(index + 1)")
+                .font(AppFonts.headline)
+                .foregroundColor(AppColors.primary)
+                .frame(width: 50, alignment: .center)
+            
+            VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                HeadlineText(text: song.title)
+                    .lineLimit(1)
+
+                SubheadlineText(text: song.artist)
+                    .lineLimit(1)
+                
+            }
+            
+            Spacer()
+            
+            PlayCountView(count: song.playCount)
+        }
+        .padding(.vertical, AppSpacing.tiny)
+    }
+}
+
 struct SongListView: View {
     @ObservedObject var viewModel: SongListViewModel
     @Environment(\.isPreview) private var isPreview
     
     var body: some View {
         List {
-            ForEach(viewModel.songs) { song in
+            ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { index, song in
                 NavigationLink(
                     destination: SongDetailView(
                         viewModel: SongDetailViewModel(
@@ -17,7 +49,7 @@ struct SongListView: View {
                         )
                     )
                 ) {
-                    SongRowView(song: song)
+                    SongRowView(song: song, index: index)
                 }
             }
         }
@@ -35,34 +67,6 @@ struct SongListView: View {
                 }
             }
         )
-    }
-}
-
-struct SongRowView: View {
-    let song: Song
-    @State private var image: UIImage?
-    
-    var body: some View {
-        HStack(spacing: AppSpacing.small) {
-            ArtworkView(artwork: song.artwork, size: 50)
-                .cornerRadius(AppRadius.small)
-            
-            VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                HeadlineText(text: song.title)
-                    .lineLimit(1)
-
-                SubheadlineText(text: song.artist)
-                    .lineLimit(1)
-
-                CaptionText(text: song.album)
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            PlayCountView(count: song.playCount)
-        }
-        .padding(.vertical, AppSpacing.tiny)
     }
 }
 
