@@ -9,7 +9,7 @@ enum AppPermissionStatus {
     case denied
 }
 
-class AppState: ObservableObject {
+class AppState: AppStateProtocol {
     @Published var musicLibraryPermissionStatus: AppPermissionStatus = .unknown
     @Published var isLoading: Bool = false
     @Published var currentError: AppError?

@@ -43,6 +43,13 @@ enum AppRadius {
     static let extraLarge: CGFloat = 16
 }
 
+struct Shadow {
+    let color: Color
+    let radius: CGFloat
+    let x: CGFloat
+    let y: CGFloat
+}
+
 struct AppShadow {
     static let small: Shadow = Shadow(
         color: Color.black.opacity(0.1),

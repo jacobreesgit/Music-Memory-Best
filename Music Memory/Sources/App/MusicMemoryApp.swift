@@ -20,6 +20,7 @@ class DIContainer: ObservableObject {
     let musicLibraryService: MusicLibraryServiceProtocol
     let permissionService: PermissionServiceProtocol
     let logger: LoggerProtocol
+    let appState: any AppStateProtocol
     
     private init() {
         self.logger = Logger()
@@ -28,5 +29,6 @@ class DIContainer: ObservableObject {
             permissionService: permissionService,
             logger: logger
         )
+        self.appState = AppState()
     }
 }
