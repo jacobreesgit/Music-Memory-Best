@@ -19,9 +19,6 @@ struct SongDetailView: View {
 
                     SubheadlineText(text: viewModel.song.album)
                 }
-                .horizontalPadding()
-                
-                PlayDetailView(playCount: viewModel.song.playCount)
             }
             .standardPadding()
         }
@@ -52,25 +49,6 @@ struct ArtworkDetailView: View {
             }
         }
         .frame(maxWidth: 300, maxHeight: 300)
-    }
-}
-
-struct PlayDetailView: View {
-    let playCount: Int
-    
-    var body: some View {
-        VStack(spacing: AppSpacing.small) {
-            HeadlineText(text: "Play Count")
-            
-            Text("\(playCount)")
-                .font(AppFonts.system(size: AppFontSize.huge, weight: AppFontWeight.bold))
-                .foregroundStyle(playCount > 0 ? AppColors.primaryText : AppColors.secondaryText)
-                .frame(height: 56)
-            
-            SubheadlineText(text: playCount == 1 ? "time" : "times")
-        }
-        .standardPadding()
-        .cardStyle() // Using the cardStyle modifier instead of manual styling
     }
 }
 

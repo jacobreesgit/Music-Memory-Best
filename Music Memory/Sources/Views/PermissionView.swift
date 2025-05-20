@@ -15,9 +15,8 @@ struct PermissionRequestView: View {
             Title2Text(text: "Music Library Access")
                 .fontWeight(AppFontWeight.bold)
             
-            Text("Music Memory needs access to your music library to show your songs sorted by play count.")
+            BodyText(text: "Music Memory needs access to your music library to show your songs sorted by play count.")
                 .multilineTextAlignment(.center)
-                .foregroundColor(AppColors.secondaryText)
                 .horizontalPadding(AppSpacing.extraLarge)
             
             Button("Allow Access", action: onRequest)
@@ -44,9 +43,8 @@ struct PermissionDeniedView: View {
             Title2Text(text: "Permission Denied")
                 .fontWeight(AppFontWeight.bold)
             
-            Text("Music Memory needs access to your music library. Please update your settings to allow access.")
+            SubheadlineText(text: "Music Memory needs access to your music library. Please update your settings to allow access.")
                 .multilineTextAlignment(.center)
-                .foregroundColor(AppColors.secondaryText)
                 .horizontalPadding(AppSpacing.extraLarge)
             
             VStack(spacing: AppSpacing.small) {
