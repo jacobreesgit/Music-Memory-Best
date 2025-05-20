@@ -34,6 +34,7 @@ class PreviewMusicLibraryService: MusicLibraryServiceProtocol {
     }
     
     func fetchSongs() async throws -> [Song] {
+        // Immediately returns the mock songs without simulating any async behavior
         return mockSongs
     }
     
@@ -69,6 +70,19 @@ class MockMPMediaItem: MPMediaItem {
     }
 }
 
+// MARK: - Preview Environment Helpers
+
+struct IsPreviewEnvironmentKey: EnvironmentKey {
+    static let defaultValue: Bool = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+}
+
+extension EnvironmentValues {
+    var isPreview: Bool {
+        get { self[IsPreviewEnvironmentKey.self] }
+        set { self[IsPreviewEnvironmentKey.self] = newValue }
+    }
+}
+
 // MARK: - Preview Extensions
 
 extension View {
@@ -78,6 +92,32 @@ extension View {
             .environmentObject(container.appState as! AppState)
     }
 }
+
+// MARK: - Mock Song Factory
+
+struct PreviewSongFactory {
+    static let mockSongs = [
+        createMockSong(id: "1", title: "Bohemian Rhapsody", artist: "Queen", album: "A Night at the Opera", playCount: 42),
+        createMockSong(id: "2", title: "Hotel California", artist: "Eagles", album: "Hotel California", playCount: 35),
+        createMockSong(id: "3", title: "Hey Jude", artist: "The Beatles", album: "The Beatles (White Album)", playCount: 28)
+    ]
+    
+    static func createMockSong(id: String, title: String, artist: String, album: String, playCount: Int) -> Song {
+        let item = MockMPMediaItem()
+        item.mockTitle = title
+        item.mockArtist = artist
+        item.mockAlbumTitle = album
+        item.mockPlayCount = playCount
+        
+        // Use a positive value for persistent ID
+        let persistentID = UInt64(abs(id.hashValue))
+        item.mockPersistentID = persistentID
+        
+        return Song(from: item)
+    }
+}
+
+// MARK: - ViewModel Preview Factories
 
 extension SongDetailViewModel {
     static func preview(song: Song) -> SongDetailViewModel {

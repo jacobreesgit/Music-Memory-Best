@@ -4,6 +4,7 @@ import Combine
 
 struct SongListView: View {
     @ObservedObject var viewModel: SongListViewModel
+    @Environment(\.isPreview) private var isPreview
     
     var body: some View {
         List {
@@ -122,15 +123,10 @@ struct ArtworkView: View {
 // Preview extension
 extension SongListView {
     static func preview() -> some View {
-        let mockSongs = ContentView_Previews.createMockSongs()
-        let container = DIContainer.preview(withMockSongs: mockSongs)
-        let viewModel = SongListViewModel(
-            musicLibraryService: container.musicLibraryService,
-            logger: container.logger
-        )
-        viewModel.songs = mockSongs
+        let mockSongs = PreviewSongFactory.mockSongs
+        let viewModel = SongListViewModel.preview(withSongs: mockSongs)
         
         return SongListView(viewModel: viewModel)
-            .previewWithContainer(container)
+            .previewWithContainer(DIContainer.preview(withMockSongs: mockSongs))
     }
 }

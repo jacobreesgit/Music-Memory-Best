@@ -94,3 +94,23 @@ class SongListViewModel: ObservableObject {
         }
     }
 }
+
+// MARK: - Preview Factory
+extension SongListViewModel {
+    static func preview(withSongs songs: [Song]) -> SongListViewModel {
+        let logger = Logger()
+        let mockService = PreviewMusicLibraryService(mockSongs: songs)
+        
+        let viewModel = SongListViewModel(
+            musicLibraryService: mockService,
+            logger: logger
+        )
+        
+        // Immediately populate the view model for previews
+        viewModel.songs = songs
+        viewModel.permissionStatus = .granted
+        viewModel.isLoading = false
+        
+        return viewModel
+    }
+}

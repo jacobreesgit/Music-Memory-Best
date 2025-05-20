@@ -91,7 +91,7 @@ struct PlayDetailView: View {
 // Preview extension
 extension SongDetailView {
     static func preview() -> some View {
-        let mockSong = ContentView_Previews.createMockSongs().first!
+        let mockSong = PreviewSongFactory.mockSongs.first!
         let viewModel = SongDetailViewModel.preview(song: mockSong)
         
         return SongDetailView(viewModel: viewModel)

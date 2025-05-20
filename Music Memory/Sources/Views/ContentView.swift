@@ -5,24 +5,31 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var container: DIContainer
     @StateObject private var viewModel: SongListViewModel
+    @Environment(\.isPreview) private var isPreview
     
     // Add a parameter that will only be used in previews
-    var previewMode: Bool = false
+    var previewMode: Bool
     
-    init(previewMode: Bool = false) {
-        self.previewMode = previewMode
-        // This will be injected via environment in the body
-        _viewModel = StateObject(wrappedValue: SongListViewModel(
-            musicLibraryService: DIContainer.shared.musicLibraryService,
-            logger: DIContainer.shared.logger
-        ))
+    init(previewMode: Bool = false, previewSongs: [Song]? = nil) {
+        self.previewMode = previewMode || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+        
+        if let songs = previewSongs, (previewMode || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1") {
+            // Use preview view model with provided songs
+            _viewModel = StateObject(wrappedValue: SongListViewModel.preview(withSongs: songs))
+        } else {
+            // Use standard view model with DI container
+            _viewModel = StateObject(wrappedValue: SongListViewModel(
+                musicLibraryService: DIContainer.shared.musicLibraryService,
+                logger: DIContainer.shared.logger
+            ))
+        }
     }
     
     var body: some View {
         NavigationView {
             Group {
                 // For preview, bypass permission check and show content directly
-                if previewMode {
+                if previewMode || isPreview {
                     SongListView(viewModel: viewModel)
                 } else {
                     // Normal flow for real device
@@ -47,7 +54,7 @@ struct ContentView: View {
             .navigationTitle("Music Memory")
             .overlay(
                 Group {
-                    if viewModel.isLoading && !previewMode {
+                    if viewModel.isLoading && !previewMode && !isPreview {
                         LoadingView()
                     }
                 }
@@ -63,7 +70,7 @@ struct ContentView: View {
             }
         }
         .task {
-            if !previewMode {
+            if !previewMode && !isPreview {
                 await viewModel.loadSongs()
             }
         }
@@ -73,26 +80,7 @@ struct ContentView: View {
 // Improved previews with proper dependency injection
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
-            .previewWithContainer(DIContainer.preview(withMockSongs: createMockSongs()))
-    }
-    
-    static func createMockSongs() -> [Song] {
-        return [
-            createMockSong(id: "1", title: "Bohemian Rhapsody", artist: "Queen", album: "A Night at the Opera", playCount: 42),
-            createMockSong(id: "2", title: "Hotel California", artist: "Eagles", album: "Hotel California", playCount: 35),
-            createMockSong(id: "3", title: "Hey Jude", artist: "The Beatles", album: "The Beatles (White Album)", playCount: 28)
-        ]
-    }
-    
-    static func createMockSong(id: String, title: String, artist: String, album: String, playCount: Int) -> Song {
-        let item = MockMPMediaItem()
-        item.mockTitle = title
-        item.mockArtist = artist
-        item.mockAlbumTitle = album
-        item.mockPlayCount = playCount
-        item.mockPersistentID = MPMediaEntityPersistentID(id.hashValue)
-        
-        return Song(from: item)
+        ContentView(previewMode: true, previewSongs: PreviewSongFactory.mockSongs)
+            .previewWithContainer(DIContainer.preview(withMockSongs: PreviewSongFactory.mockSongs))
     }
 }
