@@ -7,13 +7,26 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		075185D92DDCEEE4003EE30E /* Music Memory Best.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Music Memory Best.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		075185D92DDCEEE4003EE30E /* Music Memory.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Music Memory.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		075186C52DDCFF6C003EE30E /* Exceptions for "Music Memory" folder in "Music Memory" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 075185D82DDCEEE4003EE30E /* Music Memory */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		075185DB2DDCEEE4003EE30E /* Music Memory Best */ = {
+		075185DB2DDCEEE4003EE30E /* Music Memory */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Music Memory Best";
+			exceptions = (
+				075186C52DDCFF6C003EE30E /* Exceptions for "Music Memory" folder in "Music Memory" target */,
+			);
+			path = "Music Memory";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +45,7 @@
 		075185D02DDCEEE4003EE30E = {
 			isa = PBXGroup;
 			children = (
-				075185DB2DDCEEE4003EE30E /* Music Memory Best */,
+				075185DB2DDCEEE4003EE30E /* Music Memory */,
 				075185DA2DDCEEE4003EE30E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,7 +53,7 @@
 		075185DA2DDCEEE4003EE30E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				075185D92DDCEEE4003EE30E /* Music Memory Best.app */,
+				075185D92DDCEEE4003EE30E /* Music Memory.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +61,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		075185D82DDCEEE4003EE30E /* Music Memory Best */ = {
+		075185D82DDCEEE4003EE30E /* Music Memory */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 075185E42DDCEEE5003EE30E /* Build configuration list for PBXNativeTarget "Music Memory Best" */;
+			buildConfigurationList = 075185E42DDCEEE5003EE30E /* Build configuration list for PBXNativeTarget "Music Memory" */;
 			buildPhases = (
 				075185D52DDCEEE4003EE30E /* Sources */,
 				075185D62DDCEEE4003EE30E /* Frameworks */,
@@ -61,13 +74,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				075185DB2DDCEEE4003EE30E /* Music Memory Best */,
+				075185DB2DDCEEE4003EE30E /* Music Memory */,
 			);
-			name = "Music Memory Best";
+			name = "Music Memory";
 			packageProductDependencies = (
 			);
 			productName = "Music Memory Best";
-			productReference = 075185D92DDCEEE4003EE30E /* Music Memory Best.app */;
+			productReference = 075185D92DDCEEE4003EE30E /* Music Memory.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -85,7 +98,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 075185D42DDCEEE4003EE30E /* Build configuration list for PBXProject "Music Memory Best" */;
+			buildConfigurationList = 075185D42DDCEEE4003EE30E /* Build configuration list for PBXProject "Music Memory" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -99,7 +112,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				075185D82DDCEEE4003EE30E /* Music Memory Best */,
+				075185D82DDCEEE4003EE30E /* Music Memory */,
 			);
 		};
 /* End PBXProject section */
@@ -255,7 +268,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5RP4WRQ9V2;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -283,7 +297,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5RP4WRQ9V2;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -305,7 +320,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		075185D42DDCEEE4003EE30E /* Build configuration list for PBXProject "Music Memory Best" */ = {
+		075185D42DDCEEE4003EE30E /* Build configuration list for PBXProject "Music Memory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				075185E22DDCEEE5003EE30E /* Debug */,
@@ -314,7 +329,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		075185E42DDCEEE5003EE30E /* Build configuration list for PBXNativeTarget "Music Memory Best" */ = {
+		075185E42DDCEEE5003EE30E /* Build configuration list for PBXNativeTarget "Music Memory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				075185E52DDCEEE5003EE30E /* Debug */,
