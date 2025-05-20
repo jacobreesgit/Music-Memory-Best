@@ -40,7 +40,6 @@ struct SongListView: View {
 struct SongRowView: View {
     let song: Song
     @State private var image: UIImage?
-    private var cancellable: Cancellable?
     
     var body: some View {
         HStack(spacing: 12) {
