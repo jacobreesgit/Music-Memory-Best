@@ -48,19 +48,13 @@ struct SongRowView: View {
                 .cornerRadius(AppRadius.small)
             
             VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                Text(song.title)
-                    .font(AppFonts.headline)
-                    .foregroundColor(AppColors.primaryText)
+                HeadlineText(text: song.title)
                     .lineLimit(1)
-                
-                Text(song.artist)
-                    .font(AppFonts.subheadline)
-                    .foregroundColor(AppColors.secondaryText)
+
+                SubheadlineText(text: song.artist)
                     .lineLimit(1)
-                
-                Text(song.album)
-                    .font(AppFonts.caption)
-                    .foregroundColor(AppColors.secondaryText)
+
+                CaptionText(text: song.album)
                     .lineLimit(1)
             }
             
@@ -81,9 +75,7 @@ struct PlayCountView: View {
                 .font(AppFonts.headline)
                 .foregroundColor(count > 0 ? AppColors.primaryText : AppColors.secondaryText)
             
-            Text("plays")
-                .font(AppFonts.caption2)
-                .foregroundColor(AppColors.secondaryText)
+            CaptionText(text: "plays")
         }
     }
 }

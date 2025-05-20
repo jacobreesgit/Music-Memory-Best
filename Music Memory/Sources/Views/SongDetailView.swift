@@ -11,19 +11,13 @@ struct SongDetailView: View {
                 ArtworkDetailView(artwork: viewModel.artwork)
                 
                 VStack(spacing: AppSpacing.small) {
-                    Text(viewModel.song.title)
-                        .font(AppFonts.title)
-                        .fontWeight(AppFontWeight.bold)
+                    TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
                         .multilineTextAlignment(.center)
-                        .foregroundColor(AppColors.primaryText)
-                    
-                    Text(viewModel.song.artist)
-                        .font(AppFonts.title3)
-                        .foregroundColor(AppColors.secondaryText)
-                    
-                    Text(viewModel.song.album)
-                        .font(AppFonts.subheadline)
-                        .foregroundColor(AppColors.secondaryText)
+
+                    // For artist, we could use a slightly modified SubheadlineText
+                    SubheadlineText(text: viewModel.song.artist)
+
+                    SubheadlineText(text: viewModel.song.album)
                 }
                 .horizontalPadding()
                 
@@ -66,25 +60,17 @@ struct PlayDetailView: View {
     
     var body: some View {
         VStack(spacing: AppSpacing.small) {
-            Text("Play Count")
-                .font(AppFonts.headline)
-                .foregroundColor(AppColors.secondaryText)
+            HeadlineText(text: "Play Count")
             
             Text("\(playCount)")
                 .font(AppFonts.system(size: AppFontSize.huge, weight: AppFontWeight.bold))
                 .foregroundStyle(playCount > 0 ? AppColors.primaryText : AppColors.secondaryText)
                 .frame(height: 56)
             
-            Text(playCount == 1 ? "time" : "times")
-                .font(AppFonts.subheadline)
-                .foregroundColor(AppColors.secondaryText)
+            SubheadlineText(text: playCount == 1 ? "time" : "times")
         }
         .standardPadding()
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.large)
-                .fill(AppColors.background)
-                .appShadow(AppShadow.small)
-        )
+        .cardStyle() // Using the cardStyle modifier instead of manual styling
     }
 }
 
