@@ -43,23 +43,24 @@ struct SongRowView: View {
     @State private var image: UIImage?
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: AppSpacing.small) {
             ArtworkView(artwork: song.artwork, size: 50)
-                .cornerRadius(6)
+                .cornerRadius(AppRadius.small)
             
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: AppSpacing.tiny) {
                 Text(song.title)
-                    .font(.headline)
+                    .font(AppFonts.headline)
+                    .foregroundColor(AppColors.primaryText)
                     .lineLimit(1)
                 
                 Text(song.artist)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.subheadline)
+                    .foregroundColor(AppColors.secondaryText)
                     .lineLimit(1)
                 
                 Text(song.album)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.secondaryText)
                     .lineLimit(1)
             }
             
@@ -67,7 +68,7 @@ struct SongRowView: View {
             
             PlayCountView(count: song.playCount)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, AppSpacing.tiny)
     }
 }
 
@@ -77,12 +78,12 @@ struct PlayCountView: View {
     var body: some View {
         VStack {
             Text("\(count)")
-                .font(.headline)
-                .foregroundColor(count > 0 ? .primary : .secondary)
+                .font(AppFonts.headline)
+                .foregroundColor(count > 0 ? AppColors.primaryText : AppColors.secondaryText)
             
             Text("plays")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(AppFonts.caption2)
+                .foregroundColor(AppColors.secondaryText)
         }
     }
 }
@@ -103,11 +104,11 @@ struct ArtworkView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .padding(size / 4)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColors.secondaryText)
             }
         }
         .frame(width: size, height: size)
-        .background(Color(.systemGray6))
+        .background(AppColors.secondaryBackground)
         .onAppear {
             loadArtwork()
         }

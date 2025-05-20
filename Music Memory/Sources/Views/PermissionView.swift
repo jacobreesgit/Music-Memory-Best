@@ -5,33 +5,25 @@ struct PermissionRequestView: View {
     let onRequest: () -> Void
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: AppSpacing.large) {
             Spacer()
             
             Image(systemName: "music.note.list")
-                .font(.system(size: 64))
-                .foregroundColor(.accentColor)
+                .font(AppFonts.system(size: AppFontSize.icon))
+                .foregroundColor(AppColors.primary)
             
-            Text("Music Library Access")
-                .font(.title2)
-                .fontWeight(.bold)
+            Title2Text(text: "Music Library Access")
+                .fontWeight(AppFontWeight.bold)
             
             Text("Music Memory needs access to your music library to show your songs sorted by play count.")
                 .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 32)
+                .foregroundColor(AppColors.secondaryText)
+                .horizontalPadding(AppSpacing.extraLarge)
             
-            Button(action: onRequest) {
-                Text("Allow Access")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.accentColor)
-                    .cornerRadius(10)
-            }
-            .padding(.horizontal, 32)
-            .padding(.top, 16)
+            Button("Allow Access", action: onRequest)
+                .primaryStyle()
+                .horizontalPadding(AppSpacing.extraLarge)
+                .padding(.top, AppSpacing.medium)
             
             Spacer()
         }
@@ -42,48 +34,36 @@ struct PermissionDeniedView: View {
     let onRetry: () -> Void
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: AppSpacing.large) {
             Spacer()
             
             Image(systemName: "exclamationmark.lock.fill")
-                .font(.system(size: 64))
-                .foregroundColor(.red)
+                .font(AppFonts.system(size: AppFontSize.icon))
+                .foregroundColor(AppColors.destructive)
             
-            Text("Permission Denied")
-                .font(.title2)
-                .fontWeight(.bold)
+            Title2Text(text: "Permission Denied")
+                .fontWeight(AppFontWeight.bold)
             
             Text("Music Memory needs access to your music library. Please update your settings to allow access.")
                 .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 32)
+                .foregroundColor(AppColors.secondaryText)
+                .horizontalPadding(AppSpacing.extraLarge)
             
-            VStack(spacing: 12) {
+            VStack(spacing: AppSpacing.small) {
                 Button(action: {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }) {
                     Text("Open Settings")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .cornerRadius(10)
                 }
+                .primaryStyle()
                 
-                Button(action: onRetry) {
-                    Text("Try Again")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemGray5))
-                        .cornerRadius(10)
-                }
+                Button("Try Again", action: onRetry)
+                    .secondaryStyle()
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 16)
+            .horizontalPadding(AppSpacing.extraLarge)
+            .padding(.top, AppSpacing.medium)
             
             Spacer()
         }
@@ -93,17 +73,17 @@ struct PermissionDeniedView: View {
 struct LoadingView: View {
     var body: some View {
         ZStack {
-            Color(.systemBackground)
+            AppColors.background
                 .opacity(0.7)
                 .ignoresSafeArea()
             
             ProgressView()
                 .scaleEffect(1.5)
-                .padding()
+                .standardPadding()
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(.systemBackground))
-                        .shadow(radius: 5)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
+                        .fill(AppColors.background)
+                        .appShadow(AppShadow.small)
                 )
         }
     }

@@ -7,28 +7,29 @@ struct SongDetailView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: AppSpacing.large) {
                 ArtworkDetailView(artwork: viewModel.artwork)
                 
-                VStack(spacing: 8) {
+                VStack(spacing: AppSpacing.small) {
                     Text(viewModel.song.title)
-                        .font(.title)
-                        .fontWeight(.bold)
+                        .font(AppFonts.title)
+                        .fontWeight(AppFontWeight.bold)
                         .multilineTextAlignment(.center)
+                        .foregroundColor(AppColors.primaryText)
                     
                     Text(viewModel.song.artist)
-                        .font(.title3)
-                        .foregroundColor(.secondary)
+                        .font(AppFonts.title3)
+                        .foregroundColor(AppColors.secondaryText)
                     
                     Text(viewModel.song.album)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(AppFonts.subheadline)
+                        .foregroundColor(AppColors.secondaryText)
                 }
-                .padding(.horizontal)
+                .horizontalPadding()
                 
                 PlayDetailView(playCount: viewModel.song.playCount)
             }
-            .padding()
+            .standardPadding()
         }
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -43,17 +44,17 @@ struct ArtworkDetailView: View {
                 Image(uiImage: artwork)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .cornerRadius(12)
-                    .shadow(radius: 5)
+                    .cornerRadius(AppRadius.large)
+                    .appShadow(AppShadow.medium)
             } else {
                 Image(systemName: "music.note")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .padding(40)
-                    .foregroundColor(.secondary)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(radius: 5)
+                    .padding(AppSpacing.huge)
+                    .foregroundColor(AppColors.secondaryText)
+                    .background(AppColors.secondaryBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
+                    .appShadow(AppShadow.medium)
             }
         }
         .frame(maxWidth: 300, maxHeight: 300)
@@ -64,26 +65,25 @@ struct PlayDetailView: View {
     let playCount: Int
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: AppSpacing.small) {
             Text("Play Count")
-                .font(.headline)
-                .foregroundColor(.secondary)
+                .font(AppFonts.headline)
+                .foregroundColor(AppColors.secondaryText)
             
             Text("\(playCount)")
-                .font(.system(size: 48))
-                .fontWeight(.bold)
-                .foregroundStyle(playCount > 0 ? .primary : .secondary)
+                .font(AppFonts.system(size: AppFontSize.huge, weight: AppFontWeight.bold))
+                .foregroundStyle(playCount > 0 ? AppColors.primaryText : AppColors.secondaryText)
                 .frame(height: 56)
             
             Text(playCount == 1 ? "time" : "times")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(AppFonts.subheadline)
+                .foregroundColor(AppColors.secondaryText)
         }
-        .padding()
+        .standardPadding()
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color(.systemGray4).opacity(0.3), radius: 5)
+            RoundedRectangle(cornerRadius: AppRadius.large)
+                .fill(AppColors.background)
+                .appShadow(AppShadow.small)
         )
     }
 }

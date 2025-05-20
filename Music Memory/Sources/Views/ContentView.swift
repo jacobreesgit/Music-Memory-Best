@@ -47,7 +47,7 @@ struct ContentView: View {
                     case .requested:
                         ProgressView("Requesting permission...")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(Color(.systemBackground))
+                            .background(AppColors.background)
                     }
                 }
             }
