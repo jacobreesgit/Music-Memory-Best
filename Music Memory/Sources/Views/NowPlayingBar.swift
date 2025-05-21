@@ -17,45 +17,42 @@ struct NowPlayingBar: View {
                     }
                 } label: {
                     HStack(spacing: AppSpacing.small) {
-                        // Artwork with direct image state
-                        if let image = currentImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 50, height: 50)
-                                .cornerRadius(AppRadius.small)
-                        } else {
-                            Image(systemName: "music.note")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .padding(12)
-                                .foregroundColor(AppColors.secondaryText)
-                                .frame(width: 50, height: 50)
-                                .background(AppColors.secondaryBackground)
-                                .cornerRadius(AppRadius.small)
+                        // Custom artwork display logic matched exactly with ArtworkView
+                        Group {
+                            if let image = currentImage {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Image(systemName: "music.note")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .padding(50 / 4) // Same as size/4 used in ArtworkView
+                                    .foregroundColor(AppColors.secondaryText)
+                            }
                         }
+                        .frame(width: 50, height: 50)
+                        .background(AppColors.secondaryBackground) // Explicitly add background
+                        .cornerRadius(AppRadius.small)
                         
-                        // Rank number - matching style from SongRowView
+                        // Rank number - ensuring exact match with SongRowView
                         Text("\(viewModel.songRank ?? 0)")
                             .font(AppFonts.headline)
                             .foregroundColor(AppColors.primary)
                             .frame(width: 50, alignment: .center)
                         
-                        // Song info
+                        // Song info - Using design system text components
                         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                            Text(viewModel.title)
-                                .font(AppFonts.headline)
+                            HeadlineText(text: viewModel.title)
                                 .lineLimit(1)
                             
-                            Text(viewModel.artist)
-                                .font(AppFonts.caption)
-                                .foregroundColor(AppColors.secondaryText)
+                            SubheadlineText(text: viewModel.artist)
                                 .lineLimit(1)
                         }
                         
                         Spacer()
                         
-                        // Play/Pause button
+                        // Play/Pause button - using system constants
                         Button(action: {
                             viewModel.togglePlayback()
                         }) {
@@ -65,9 +62,10 @@ struct NowPlayingBar: View {
                                 .frame(width: 44, height: 44)
                         }
                     }
+                    .padding(.leading, 24) // Specify left padding
+                    .padding(.trailing, 16) // Specify right padding
                 }
                 .buttonStyle(PlainButtonStyle()) // Use plain style to avoid visual changes
-                .padding(.horizontal, AppSpacing.medium)
                 .padding(.vertical, AppSpacing.medium)
                 .background(AppColors.secondaryBackground)
                 .cornerRadius(AppRadius.medium)
