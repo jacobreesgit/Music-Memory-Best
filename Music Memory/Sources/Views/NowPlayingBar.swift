@@ -10,49 +10,57 @@ struct NowPlayingBar: View {
     var body: some View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
-                HStack(spacing: AppSpacing.small) {
-                    // Artwork with direct image state
-                    if let image = currentImage {
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 50, height: 50)
-                            .cornerRadius(AppRadius.small)
-                    } else {
-                        Image(systemName: "music.note")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding(12)
-                            .foregroundColor(AppColors.secondaryText)
-                            .frame(width: 50, height: 50)
-                            .background(AppColors.secondaryBackground)
-                            .cornerRadius(AppRadius.small)
+                Button {
+                    // Navigate to song detail view when the now playing bar is tapped
+                    if let currentSong = viewModel.currentSong {
+                        navigationManager.navigateToSongDetail(song: currentSong)
                     }
-                    
-                    // Song info
-                    VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                        Text(viewModel.title)
-                            .font(AppFonts.headline)
-                            .lineLimit(1)
+                } label: {
+                    HStack(spacing: AppSpacing.small) {
+                        // Artwork with direct image state
+                        if let image = currentImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 50, height: 50)
+                                .cornerRadius(AppRadius.small)
+                        } else {
+                            Image(systemName: "music.note")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .padding(12)
+                                .foregroundColor(AppColors.secondaryText)
+                                .frame(width: 50, height: 50)
+                                .background(AppColors.secondaryBackground)
+                                .cornerRadius(AppRadius.small)
+                        }
                         
-                        Text(viewModel.artist)
-                            .font(AppFonts.caption)
-                            .foregroundColor(AppColors.secondaryText)
-                            .lineLimit(1)
-                    }
-                    
-                    Spacer()
-                    
-                    // Play/Pause button
-                    Button(action: {
-                        viewModel.togglePlayback()
-                    }) {
-                        Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(AppColors.primary)
-                            .frame(width: 44, height: 44)
+                        // Song info
+                        VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                            Text(viewModel.title)
+                                .font(AppFonts.headline)
+                                .lineLimit(1)
+                            
+                            Text(viewModel.artist)
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.secondaryText)
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        // Play/Pause button
+                        Button(action: {
+                            viewModel.togglePlayback()
+                        }) {
+                            Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(AppColors.primary)
+                                .frame(width: 44, height: 44)
+                        }
                     }
                 }
+                .buttonStyle(PlainButtonStyle()) // Use plain style to avoid visual changes
                 .padding(.horizontal, AppSpacing.medium)
                 .padding(.vertical, AppSpacing.medium)
                 .background(AppColors.secondaryBackground)
