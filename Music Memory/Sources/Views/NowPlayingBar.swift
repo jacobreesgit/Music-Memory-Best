@@ -67,7 +67,7 @@ struct NowPlayingBar: View {
                 }
                 .buttonStyle(PlainButtonStyle()) // Use plain style to avoid visual changes
                 .padding(.vertical, AppSpacing.medium)
-                .background(AppColors.secondaryBackground)
+                .background(.ultraThinMaterial)
                 .cornerRadius(AppRadius.medium)
                 .appShadow(AppShadow.medium)
                 .padding(.horizontal, AppSpacing.medium)

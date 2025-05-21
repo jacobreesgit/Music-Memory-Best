@@ -97,7 +97,7 @@ struct TabBarView: View {
                 VStack {
                     Spacer()
                     NowPlayingBar()
-                        .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.medium) // Spacing between tab and now playing bar
+                        .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.small) // Spacing between tab and now playing bar
                 }
                 .ignoresSafeArea()
             }
