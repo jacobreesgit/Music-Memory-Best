@@ -62,8 +62,8 @@ struct NowPlayingBar: View {
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(), value: viewModel.isVisible)
-            .onChange(of: viewModel.currentArtwork) { artwork in
-                updateArtwork(artwork)
+            .onChange(of: viewModel.currentArtwork) { oldValue, newValue in
+                updateArtwork(newValue)
             }
             .onAppear {
                 updateArtwork(viewModel.currentArtwork)
@@ -120,6 +120,7 @@ class NowPlayingViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.updatePlaybackState()
+                self?.checkForSongCompletion()
             }
             .store(in: &cancellables)
         
@@ -131,7 +132,7 @@ class NowPlayingViewModel: ObservableObject {
                 
                 // Debug print for testing media library refresh
                 if let mediaItem = self?.musicPlayer.nowPlayingItem {
-                    print("Now playing item changed - refreshing media library")
+                    print("Now playing item changed")
                     print("  Title: \(mediaItem.title ?? "Unknown Title")")
                     print("  Artist: \(mediaItem.artist ?? "Unknown Artist")")
                     print("  Album: \(mediaItem.albumTitle ?? "Unknown Album")")
@@ -142,16 +143,7 @@ class NowPlayingViewModel: ObservableObject {
                     print("Now playing item changed - No item playing")
                 }
                 
-                // Post a notification for library refresh
-                NotificationCenter.default.post(name: .nowPlayingItemChanged, object: nil)
-            }
-            .store(in: &cancellables)
-            
-        // Observe playback completion notification
-        NotificationCenter.default.publisher(for: .MPMusicPlayerControllerPlaybackStateDidChange, object: musicPlayer)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.checkForSongCompletion()
+                // No longer refreshing library here - only refresh when a song ends
             }
             .store(in: &cancellables)
     }
@@ -199,21 +191,7 @@ class NowPlayingViewModel: ObservableObject {
             currentSong = Song(from: mediaItem)
             isVisible = true
             
-            // If the same song is playing again (repeated)
-            if songID == currentSongID {
-                logger.log("Same song playing again - refreshing media library", level: .info)
-                
-                // Invalidate the cache to ensure fresh play count data
-                if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
-                    Task {
-                        await musicLibraryService.invalidateCache()
-                        // Post notification that others can observe
-                        NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
-                    }
-                }
-            }
-            
-            // Update current song ID
+            // Update current song ID without refreshing library
             currentSongID = songID
         } else {
             isVisible = false
