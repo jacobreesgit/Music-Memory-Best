@@ -36,21 +36,18 @@ struct SongRowView: View {
 
 struct SongListView: View {
     @ObservedObject var viewModel: SongListViewModel
+    @EnvironmentObject var navigationManager: NavigationManager
     @Environment(\.isPreview) private var isPreview
     
     var body: some View {
         List {
             ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { index, song in
-                NavigationLink(
-                    destination: SongDetailView(
-                        viewModel: SongDetailViewModel(
-                            song: song,
-                            logger: DIContainer.shared.logger
-                        )
-                    )
-                ) {
+                Button {
+                    navigationManager.navigateToSongDetail(song: song)
+                } label: {
                     SongRowView(song: song, index: index)
                 }
+                .buttonStyle(.plain)
             }
         }
         .refreshable {
@@ -125,5 +122,6 @@ extension SongListView {
         
         return SongListView(viewModel: viewModel)
             .previewWithContainer(DIContainer.preview(withMockSongs: mockSongs))
+            .environmentObject(NavigationManager())
     }
 }

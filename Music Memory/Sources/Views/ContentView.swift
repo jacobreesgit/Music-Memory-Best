@@ -4,6 +4,7 @@ import MediaPlayer
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var container: DIContainer
+    @StateObject private var navigationManager = NavigationManager()
     @Environment(\.isPreview) private var isPreview
     
     // Add a parameter that will only be used in previews
@@ -17,6 +18,7 @@ struct ContentView: View {
     
     var body: some View {
         TabBarView(previewMode: previewMode, previewSongs: previewSongs)
+            .environmentObject(navigationManager)
     }
 }
 

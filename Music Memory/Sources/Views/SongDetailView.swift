@@ -4,6 +4,7 @@ import UIKit
 struct SongDetailView: View {
     @ObservedObject var viewModel: SongDetailViewModel
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var navigationManager: NavigationManager
     
     var body: some View {
         ScrollView {
@@ -18,11 +19,36 @@ struct SongDetailView: View {
                     SubheadlineText(text: viewModel.song.artist)
 
                     SubheadlineText(text: viewModel.song.album)
+                    
+                    // Play count in detail view
+                    HStack {
+                        Spacer()
+                        VStack {
+                            Text("\(viewModel.song.playCount)")
+                                .font(.system(size: AppFontSize.huge, weight: .bold))
+                                .foregroundColor(AppColors.primary)
+                            
+                            Text("Plays")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.secondaryText)
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, AppSpacing.large)
                 }
             }
             .standardPadding()
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    // Button action could be to share song or other functionality
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+        }
     }
 }
 
@@ -58,7 +84,10 @@ extension SongDetailView {
         let mockSong = PreviewSongFactory.mockSongs.first!
         let viewModel = SongDetailViewModel.preview(song: mockSong)
         
-        return SongDetailView(viewModel: viewModel)
-            .previewWithContainer(DIContainer.preview())
+        return NavigationStack {
+            SongDetailView(viewModel: viewModel)
+        }
+        .previewWithContainer(DIContainer.preview())
+        .environmentObject(NavigationManager())
     }
 }

@@ -9,6 +9,7 @@ struct MusicMemoryApp: App {
             ContentView()
                 .environmentObject(container)
                 .environmentObject(container.appState as! AppState)
+                .environmentObject(container.navigationManager)
         }
     }
 }

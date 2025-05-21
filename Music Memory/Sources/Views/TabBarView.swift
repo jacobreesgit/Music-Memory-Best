@@ -3,6 +3,7 @@ import SwiftUI
 struct TabBarView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var container: DIContainer
+    @EnvironmentObject var navigationManager: NavigationManager
     @StateObject private var songListViewModel: SongListViewModel
     @Environment(\.isPreview) private var isPreview
     
@@ -27,7 +28,7 @@ struct TabBarView: View {
     var body: some View {
         TabView {
             // Library tab
-            NavigationStack {
+            NavigationStack(path: $navigationManager.songListPath) {
                 Group {
                     // For preview, bypass permission check and show content directly
                     if previewMode || isPreview {
@@ -53,6 +54,14 @@ struct TabBarView: View {
                     }
                 }
                 .navigationTitle("Library")
+                .navigationDestination(for: Song.self) { song in
+                    SongDetailView(
+                        viewModel: SongDetailViewModel(
+                            song: song,
+                            logger: DIContainer.shared.logger
+                        )
+                    )
+                }
                 .overlay(
                     Group {
                         if songListViewModel.isLoading && !previewMode && !isPreview {

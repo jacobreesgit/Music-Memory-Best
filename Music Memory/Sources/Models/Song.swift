@@ -1,7 +1,7 @@
 import Foundation
 import MediaPlayer
 
-struct Song: Identifiable, Equatable {
+struct Song: Identifiable, Equatable, Hashable {
     let id: String
     let title: String
     let artist: String
@@ -22,6 +22,11 @@ struct Song: Identifiable, Equatable {
     
     static func == (lhs: Song, rhs: Song) -> Bool {
         lhs.id == rhs.id
+    }
+    
+    // Add hash function for Hashable conformance
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
