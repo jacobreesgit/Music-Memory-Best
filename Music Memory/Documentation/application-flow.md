@@ -27,16 +27,32 @@
    - Caches the result
    - Returns the sorted songs
 
+## Navigation System
+
+1. **NavigationManager**: The app uses a centralized navigation manager that:
+   - Maintains NavigationPath objects for different navigation flows
+   - Provides methods to navigate to specific screens 
+   - Handles programmatic navigation (push, pop, popToRoot)
+   - Persists navigation state across app lifecycle events
+
+2. **Navigation Implementation**:
+   - Uses SwiftUI's NavigationStack with NavigationPath for type-safe navigation
+   - Employs navigationDestination modifiers for different destination types
+   - Supports deep linking and complex navigation patterns
+   - Preserves navigation state during state restoration
+
 ## User Navigation
 
 1. **Song List**: User sees a list of songs sorted by play count
    - Each row shows song title, artist, album, artwork, and play count
+   - User taps a song to navigate to the song details screen
    - User can pull to refresh the list
 
 2. **Song Details**: User taps a song to see detailed information
    - Shows larger artwork
    - Displays comprehensive song information
    - Shows play count in a prominent way
+   - Provides toolbar actions for additional functionality
 
 ## Error Handling Flow
 
@@ -62,17 +78,3 @@
 2. **Caching**:
    - The song list is cached to avoid repeated system API calls
    - Cache is invalidated when necessary (app returns to foreground)
-
-## Testing the App
-
-1. **Unit Tests**: Run unit tests to verify core functionality
-   - `MusicLibraryServiceTests`: Tests the music library service
-   - `SongListViewModelTests`: Tests the song list view model
-
-2. **Manual Testing Checklist**:
-   - Verify permission flows work correctly
-   - Check song listing and sorting
-   - Confirm artwork loading
-   - Test error scenarios
-   - Verify UI in both light and dark mode
-   - Test with different accessibility settings

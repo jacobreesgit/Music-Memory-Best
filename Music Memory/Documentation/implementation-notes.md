@@ -8,6 +8,7 @@ This app follows the MVVM (Model-View-ViewModel) architecture pattern to maintai
 - **Views**: UI layer built with SwiftUI
 - **ViewModels**: Connect the data models to the views and handle presentation logic
 - **Services**: Handle business logic and data operations
+- **Navigation**: Manages app navigation flows and state
 
 ## Key Design Decisions
 
@@ -37,7 +38,33 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
 
 This ensures that multiple concurrent accesses to the music library are properly synchronized.
 
-### 4. Comprehensive Error Handling
+### 4. Modern Navigation System
+
+The app implements a modern SwiftUI navigation system using:
+- `NavigationPath` for type-safe navigation
+- `NavigationStack` for managing navigation hierarchy
+- `NavigationManager` for centralized navigation state management
+- `.navigationDestination` modifiers for type-based routing
+
+```swift
+class NavigationManager: ObservableObject {
+    @Published var songListPath = NavigationPath()
+    
+    func navigateToSongDetail(song: Song) {
+        songListPath.append(song)
+    }
+    
+    // Additional navigation methods
+}
+```
+
+This enables:
+- Programmatic navigation control
+- Deep linking capabilities
+- Better navigation state preservation
+- More testable navigation logic
+
+### 5. Comprehensive Error Handling
 
 The app uses a custom `AppError` enum with associated values to handle various error scenarios:
 - Permission-related errors
@@ -47,7 +74,7 @@ The app uses a custom `AppError` enum with associated values to handle various e
 
 Each error includes user-friendly messages and recovery suggestions.
 
-### 5. Permission Flow
+### 6. Permission Flow
 
 The app implements a thorough permission flow:
 1. Check current permission status on app launch
@@ -55,15 +82,16 @@ The app implements a thorough permission flow:
 3. Provide guidance for users when permissions are denied
 4. Handle permission changes during the app lifecycle
 
-### 6. State Management
+### 7. State Management
 
 The app uses a combination of:
 - Global app state via `AppState` for app-wide concerns
+- Navigation state via `NavigationManager` for app navigation
 - ViewModel-specific state for view-related state
 - `@Published` properties for reactive updates
 - Proper loading states to handle asynchronous operations
 
-### 7. Caching Strategy
+### 8. Caching Strategy
 
 The music library service implements a simple caching mechanism to avoid repeated fetches of the same data. The cache is invalidated when appropriate.
 
@@ -74,19 +102,14 @@ The music library service implements a simple caching mechanism to avoid repeate
 3. **Filtering/Sorting Options**: Add additional filtering and sorting options
 4. **Playback Integration**: Add the ability to play songs directly from the app
 5. **Analytics**: Add analytics to track app usage and performance
-
-## Testing Strategy
-
-The app includes:
-1. **Unit Tests**: For services and view models
-2. **UI Tests**: For critical user flows
-3. **Mock Implementations**: For services to facilitate isolated testing
+6. **DeepLink Support**: Enhance navigation system to support external deep links
 
 ## Performance Considerations
 
 1. **Efficient Media Access**: The app accesses the media library efficiently to minimize battery impact
 2. **Caching**: The app caches data to reduce repeated access to system APIs
 3. **UI Performance**: The app uses lazy loading and efficient list rendering to ensure smooth scrolling
+4. **Navigation**: The app uses efficient navigation techniques to prevent memory leaks and performance issues
 
 ## Accessibility
 
