@@ -20,6 +20,7 @@ class SongListViewModel: ObservableObject {
         self.musicLibraryService = musicLibraryService
         self.logger = logger
         setupErrorHandling()
+        setupNotificationHandlers()
     }
     
     private func setupErrorHandling() {
@@ -30,6 +31,19 @@ class SongListViewModel: ObservableObject {
                     name: .appErrorOccurred,
                     object: error
                 )
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func setupNotificationHandlers() {
+        // Listen for requests to update song rank
+        NotificationCenter.default.publisher(for: .requestSongRankUpdate)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                if let currentSong = notification.object as? Song, let songs = self?.songs {
+                    // Post songs list for NowPlayingViewModel to calculate rank
+                    NotificationCenter.default.post(name: .songsListUpdated, object: songs)
+                }
             }
             .store(in: &cancellables)
     }
@@ -50,6 +64,9 @@ class SongListViewModel: ObservableObject {
                 await musicLibraryService.invalidateCache()
                 songs = try await musicLibraryService.fetchSongs()
                 logger.log("Pull to refresh completed successfully, fetched \(songs.count) songs", level: .info)
+                
+                // Notify that songs list has been updated
+                NotificationCenter.default.post(name: .songsListUpdated, object: songs)
             }
             // Otherwise, just wait for user to tap "Allow Access"
         } catch {
@@ -73,6 +90,9 @@ class SongListViewModel: ObservableObject {
         if granted {
             do {
                 songs = try await musicLibraryService.fetchSongs()
+                
+                // Notify that songs list has been updated
+                NotificationCenter.default.post(name: .songsListUpdated, object: songs)
             } catch {
                 handleError(error)
             }

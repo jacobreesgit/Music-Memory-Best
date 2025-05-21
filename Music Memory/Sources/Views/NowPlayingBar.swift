@@ -35,6 +35,12 @@ struct NowPlayingBar: View {
                                 .cornerRadius(AppRadius.small)
                         }
                         
+                        // Rank number - matching style from SongRowView
+                        Text("\(viewModel.songRank ?? 0)")
+                            .font(AppFonts.headline)
+                            .foregroundColor(AppColors.primary)
+                            .frame(width: 50, alignment: .center)
+                        
                         // Song info
                         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
                             Text(viewModel.title)
@@ -102,6 +108,7 @@ class NowPlayingViewModel: ObservableObject {
     @Published var artist = ""
     @Published var currentArtwork: MPMediaItemArtwork?
     @Published var currentSong: Song?
+    @Published var songRank: Int? = nil // Added to track rank of the currently playing song
     
     private var logger = Logger()
     private var cancellables = Set<AnyCancellable>()
@@ -143,6 +150,16 @@ class NowPlayingViewModel: ObservableObject {
                 self?.updateNowPlayingItem()
             }
             .store(in: &cancellables)
+            
+        // Listen for song list updates to update rank
+        NotificationCenter.default.publisher(for: .songsListUpdated)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                if let songs = notification.object as? [Song] {
+                    self?.updateSongRank(songs: songs)
+                }
+            }
+            .store(in: &cancellables)
     }
     
     func checkCurrentlyPlaying() {
@@ -161,10 +178,28 @@ class NowPlayingViewModel: ObservableObject {
             currentArtwork = mediaItem.artwork
             currentSong = Song(from: mediaItem)
             isVisible = true
+            
+            // Request to update rank based on newest song list
+            NotificationCenter.default.post(name: .requestSongRankUpdate, object: currentSong)
         } else {
             isVisible = false
             currentSong = nil
             currentArtwork = nil
+            songRank = nil
+        }
+    }
+    
+    func updateSongRank(songs: [Song]) {
+        guard let currentSong = currentSong else {
+            songRank = nil
+            return
+        }
+        
+        // Find the index of the current song in the song list (sorted by play count)
+        if let index = songs.firstIndex(where: { $0.id == currentSong.id }) {
+            songRank = index + 1
+        } else {
+            songRank = nil
         }
     }
     
@@ -183,4 +218,10 @@ class NowPlayingViewModel: ObservableObject {
         musicPlayer.prepareToPlay()
         musicPlayer.play()
     }
+}
+
+// Extend NSNotification.Name for song rank updates
+extension NSNotification.Name {
+    static let requestSongRankUpdate = NSNotification.Name("requestSongRankUpdate")
+    static let songsListUpdated = NSNotification.Name("songsListUpdated")
 }
