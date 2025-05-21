@@ -5,14 +5,29 @@ import Combine
 struct NowPlayingBar: View {
     @ObservedObject private var viewModel = NowPlayingViewModel.shared
     @EnvironmentObject var navigationManager: NavigationManager
+    @State private var currentImage: UIImage?
     
     var body: some View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
                 HStack(spacing: AppSpacing.small) {
-                    // Artwork
-                    ArtworkView(artwork: viewModel.currentArtwork, size: 50)
-                        .cornerRadius(AppRadius.small)
+                    // Artwork with direct image state
+                    if let image = currentImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 50, height: 50)
+                            .cornerRadius(AppRadius.small)
+                    } else {
+                        Image(systemName: "music.note")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(12)
+                            .foregroundColor(AppColors.secondaryText)
+                            .frame(width: 50, height: 50)
+                            .background(AppColors.secondaryBackground)
+                            .cornerRadius(AppRadius.small)
+                    }
                     
                     // Song info
                     VStack(alignment: .leading, spacing: AppSpacing.tiny) {
@@ -47,6 +62,20 @@ struct NowPlayingBar: View {
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(), value: viewModel.isVisible)
+            .onChange(of: viewModel.currentArtwork) { artwork in
+                updateArtwork(artwork)
+            }
+            .onAppear {
+                updateArtwork(viewModel.currentArtwork)
+            }
+        }
+    }
+    
+    private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
+        if let artwork = artwork {
+            currentImage = artwork.image(at: CGSize(width: 50, height: 50))
+        } else {
+            currentImage = nil
         }
     }
 }
@@ -96,7 +125,17 @@ class NowPlayingViewModel: ObservableObject {
                 self?.updateNowPlayingItem()
                 
                 // Debug print for testing media library refresh
-                print("Now playing item changed - refreshing media library")
+                if let mediaItem = self?.musicPlayer.nowPlayingItem {
+                    print("Now playing item changed - refreshing media library")
+                    print("  Title: \(mediaItem.title ?? "Unknown Title")")
+                    print("  Artist: \(mediaItem.artist ?? "Unknown Artist")")
+                    print("  Album: \(mediaItem.albumTitle ?? "Unknown Album")")
+                    print("  Play Count: \(mediaItem.playCount)")
+                    print("  Has Artwork: \(mediaItem.artwork != nil ? "Yes" : "No")")
+                    print("  Persistent ID: \(mediaItem.persistentID.stringValue)")
+                } else {
+                    print("Now playing item changed - No item playing")
+                }
                 
                 // Post a notification for library refresh
                 NotificationCenter.default.post(name: .nowPlayingItemChanged, object: nil)
@@ -123,6 +162,7 @@ class NowPlayingViewModel: ObservableObject {
         } else {
             isVisible = false
             currentSong = nil
+            currentArtwork = nil
         }
     }
     
