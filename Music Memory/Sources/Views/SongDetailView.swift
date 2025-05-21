@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MediaPlayer
 
 struct SongDetailView: View {
     @ObservedObject var viewModel: SongDetailViewModel
@@ -35,6 +36,26 @@ struct SongDetailView: View {
                         Spacer()
                     }
                     .padding(.top, AppSpacing.large)
+                    
+                    // Play button
+                    Button(action: {
+                        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
+                        let descriptor = MPMediaItemCollection(items: [viewModel.song.mediaItem])
+                        musicPlayer.setQueue(with: descriptor)
+                        musicPlayer.prepareToPlay()
+                        musicPlayer.play()
+                    }) {
+                        HStack {
+                            Image(systemName: "play.fill")
+                            Text("Play")
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(AppColors.primary)
+                        .foregroundColor(.white)
+                        .cornerRadius(AppRadius.medium)
+                    }
+                    .padding(.top, AppSpacing.medium)
                 }
             }
             .standardPadding()

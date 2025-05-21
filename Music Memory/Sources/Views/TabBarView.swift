@@ -26,71 +26,80 @@ struct TabBarView: View {
     }
     
     var body: some View {
-        TabView {
-            // Library tab
-            NavigationStack(path: $navigationManager.songListPath) {
-                Group {
-                    // For preview, bypass permission check and show content directly
-                    if previewMode || isPreview {
-                        SongListView(viewModel: songListViewModel)
-                    } else {
-                        // Normal flow for real device
-                        switch songListViewModel.permissionStatus {
-                        case .granted:
+        ZStack(alignment: .bottom) {
+            // Main TabView
+            TabView {
+                // Library tab
+                NavigationStack(path: $navigationManager.songListPath) {
+                    Group {
+                        // For preview, bypass permission check and show content directly
+                        if previewMode || isPreview {
                             SongListView(viewModel: songListViewModel)
-                        case .denied:
-                            PermissionDeniedView(
-                                onRetry: { Task { await songListViewModel.requestPermission() } }
-                            )
-                        case .notRequested, .unknown:
-                            PermissionRequestView(
-                                onRequest: { Task { await songListViewModel.requestPermission() } }
-                            )
-                        case .requested:
-                            ProgressView("Requesting permission...")
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(AppColors.background)
+                        } else {
+                            // Normal flow for real device
+                            switch songListViewModel.permissionStatus {
+                            case .granted:
+                                SongListView(viewModel: songListViewModel)
+                            case .denied:
+                                PermissionDeniedView(
+                                    onRetry: { Task { await songListViewModel.requestPermission() } }
+                                )
+                            case .notRequested, .unknown:
+                                PermissionRequestView(
+                                    onRequest: { Task { await songListViewModel.requestPermission() } }
+                                )
+                            case .requested:
+                                ProgressView("Requesting permission...")
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(AppColors.background)
+                            }
                         }
                     }
-                }
-                .navigationTitle("Library")
-                .navigationDestination(for: Song.self) { song in
-                    SongDetailView(
-                        viewModel: SongDetailViewModel(
-                            song: song,
-                            logger: DIContainer.shared.logger
+                    .navigationTitle("Library")
+                    .navigationDestination(for: Song.self) { song in
+                        SongDetailView(
+                            viewModel: SongDetailViewModel(
+                                song: song,
+                                logger: DIContainer.shared.logger
+                            )
                         )
+                    }
+                    .overlay(
+                        Group {
+                            if songListViewModel.isLoading && !previewMode && !isPreview {
+                                LoadingView()
+                            }
+                        }
                     )
                 }
-                .overlay(
-                    Group {
-                        if songListViewModel.isLoading && !previewMode && !isPreview {
-                            LoadingView()
-                        }
+                .tabItem {
+                    Label("Library", systemImage: "music.note.list")
+                }
+            }
+            .accentColor(AppColors.primary)
+            .alert(item: $appState.currentError) { error in
+                Alert(
+                    title: Text("Error"),
+                    message: Text(error.userMessage),
+                    dismissButton: .default(Text("OK")) {
+                        appState.clearError()
                     }
                 )
-                .toolbarBackground(.visible, for: .tabBar)
-                .toolbarBackground(AppColors.secondaryBackground, for: .tabBar)
             }
-            .tabItem {
-                Label("Library", systemImage: "music.note.list")
-            }
-            
-            // Additional tabs can be added here in the future if needed
-        }
-        .accentColor(AppColors.primary)
-        .alert(item: $appState.currentError) { error in
-            Alert(
-                title: Text("Error"),
-                message: Text(error.userMessage),
-                dismissButton: .default(Text("OK")) {
-                    appState.clearError()
+            .task {
+                if !previewMode && !isPreview {
+                    await songListViewModel.loadSongs()
                 }
-            )
-        }
-        .task {
-            if !previewMode && !isPreview {
-                await songListViewModel.loadSongs()
+            }
+
+            // Now Playing Bar
+            GeometryReader { geometry in
+                VStack {
+                    Spacer()
+                    NowPlayingBar()
+                        .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.medium) // Spacing between tab and now playing bar
+                }
+                .ignoresSafeArea()
             }
         }
     }

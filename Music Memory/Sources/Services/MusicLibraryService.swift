@@ -55,4 +55,14 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
     func invalidateCache() {
         cachedSongs = nil
     }
+    
+    func setupNowPlayingObserver() {
+        Task {
+            for await _ in NotificationCenter.default.notifications(named: .nowPlayingItemChanged) {
+                // Song changed - invalidate cache to refresh library
+                invalidateCache()
+                logger.log("Refreshing music library after song change", level: .info)
+            }
+        }
+    }
 }

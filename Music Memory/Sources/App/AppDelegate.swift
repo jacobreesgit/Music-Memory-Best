@@ -46,6 +46,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Check initial permission status
         checkPermissionStatus()
+        
+        // Set up now playing observer to refresh library when songs change
+        if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
+            Task {
+                await musicLibraryService.setupNowPlayingObserver()
+            }
+        }
     }
     
     private func checkPermissionStatus() {
