@@ -95,11 +95,7 @@ class NowPlayingViewModel: ObservableObject {
     @Published var currentArtwork: MPMediaItemArtwork?
     @Published var currentSong: Song?
     
-    // Track previous playback state and current song ID
-    private var previousPlaybackState: MPMusicPlaybackState?
-    private var currentSongID: String?
     private var logger = Logger()
-    
     private var cancellables = Set<AnyCancellable>()
     
     init() {
@@ -120,7 +116,6 @@ class NowPlayingViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.updatePlaybackState()
-                self?.checkForSongCompletion()
             }
             .store(in: &cancellables)
         
@@ -129,21 +124,15 @@ class NowPlayingViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.updateNowPlayingItem()
-                
-                // Debug print for testing media library refresh
-                if let mediaItem = self?.musicPlayer.nowPlayingItem {
-                    print("Now playing item changed")
-                    print("  Title: \(mediaItem.title ?? "Unknown Title")")
-                    print("  Artist: \(mediaItem.artist ?? "Unknown Artist")")
-                    print("  Album: \(mediaItem.albumTitle ?? "Unknown Album")")
-                    print("  Play Count: \(mediaItem.playCount)")
-                    print("  Has Artwork: \(mediaItem.artwork != nil ? "Yes" : "No")")
-                    print("  Persistent ID: \(mediaItem.persistentID.stringValue)")
-                } else {
-                    print("Now playing item changed - No item playing")
-                }
-                
-                // No longer refreshing library here - only refresh when a song ends
+            }
+            .store(in: &cancellables)
+        
+        // Listen for media library changes from the central notification
+        NotificationCenter.default.publisher(for: .mediaLibraryChanged)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                // Update the current song info when library changes
+                self?.updateNowPlayingItem()
             }
             .store(in: &cancellables)
     }
@@ -154,50 +143,20 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     func updatePlaybackState() {
-        let newState = musicPlayer.playbackState
-        isPlaying = newState == .playing
-        previousPlaybackState = newState
-    }
-    
-    func checkForSongCompletion() {
-        let currentState = musicPlayer.playbackState
-        
-        // Check if song is the same but state changed from playing to stopped/paused
-        if previousPlaybackState == .playing &&
-           (currentState == .stopped || currentState == .paused) {
-            // The song likely completed playing
-            logger.log("Song completed - refreshing media library", level: .info)
-            
-            // Invalidate the cache to get fresh data
-            if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
-                Task {
-                    await musicLibraryService.invalidateCache()
-                    // Post notification that others can observe
-                    NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
-                }
-            }
-        }
-        
-        // Update the previous state
-        previousPlaybackState = currentState
+        isPlaying = musicPlayer.playbackState == .playing
     }
     
     func updateNowPlayingItem() {
         if let mediaItem = musicPlayer.nowPlayingItem {
-            let songID = mediaItem.persistentID.stringValue
             title = mediaItem.title ?? "Unknown Title"
             artist = mediaItem.artist ?? "Unknown Artist"
             currentArtwork = mediaItem.artwork
             currentSong = Song(from: mediaItem)
             isVisible = true
-            
-            // Update current song ID without refreshing library
-            currentSongID = songID
         } else {
             isVisible = false
             currentSong = nil
             currentArtwork = nil
-            currentSongID = nil
         }
     }
     
@@ -216,9 +175,4 @@ class NowPlayingViewModel: ObservableObject {
         musicPlayer.prepareToPlay()
         musicPlayer.play()
     }
-}
-
-// Notification name extension
-extension NSNotification.Name {
-    static let nowPlayingItemChanged = NSNotification.Name("nowPlayingItemChanged")
 }

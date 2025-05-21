@@ -41,6 +41,15 @@ class PreviewMusicLibraryService: MusicLibraryServiceProtocol {
     func checkPermissionStatus() async -> AppPermissionStatus {
         return permissionStatus
     }
+    
+    // Add the new method required by the protocol
+    func invalidateCache() async {
+        // No-op in preview service since we don't cache anything
+        // We could post the notification though for completeness
+        Task { @MainActor in
+            NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
+        }
+    }
 }
 
 // MARK: - Mock MPMediaItem for Previews
