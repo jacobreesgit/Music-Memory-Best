@@ -39,13 +39,17 @@ class SongListViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
+        logger.log("Pull to refresh initiated", level: .info)
+        
         do {
             // Check current permission status first
             await updatePermissionStatus(musicLibraryService.checkPermissionStatus())
             
-            // If permission is already granted, load songs
+            // If permission is already granted, invalidate the cache and load songs
             if permissionStatus == .granted {
+                await musicLibraryService.invalidateCache()
                 songs = try await musicLibraryService.fetchSongs()
+                logger.log("Pull to refresh completed successfully, fetched \(songs.count) songs", level: .info)
             }
             // Otherwise, just wait for user to tap "Allow Access"
         } catch {
