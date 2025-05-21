@@ -95,6 +95,11 @@ class NowPlayingViewModel: ObservableObject {
     @Published var currentArtwork: MPMediaItemArtwork?
     @Published var currentSong: Song?
     
+    // Track previous playback state and current song ID
+    private var previousPlaybackState: MPMusicPlaybackState?
+    private var currentSongID: String?
+    private var logger = Logger()
+    
     private var cancellables = Set<AnyCancellable>()
     
     init() {
@@ -141,6 +146,14 @@ class NowPlayingViewModel: ObservableObject {
                 NotificationCenter.default.post(name: .nowPlayingItemChanged, object: nil)
             }
             .store(in: &cancellables)
+            
+        // Observe playback completion notification
+        NotificationCenter.default.publisher(for: .MPMusicPlayerControllerPlaybackStateDidChange, object: musicPlayer)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.checkForSongCompletion()
+            }
+            .store(in: &cancellables)
     }
     
     func checkCurrentlyPlaying() {
@@ -149,20 +162,64 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     func updatePlaybackState() {
-        isPlaying = musicPlayer.playbackState == .playing
+        let newState = musicPlayer.playbackState
+        isPlaying = newState == .playing
+        previousPlaybackState = newState
+    }
+    
+    func checkForSongCompletion() {
+        let currentState = musicPlayer.playbackState
+        
+        // Check if song is the same but state changed from playing to stopped/paused
+        if previousPlaybackState == .playing &&
+           (currentState == .stopped || currentState == .paused) {
+            // The song likely completed playing
+            logger.log("Song completed - refreshing media library", level: .info)
+            
+            // Invalidate the cache to get fresh data
+            if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
+                Task {
+                    await musicLibraryService.invalidateCache()
+                    // Post notification that others can observe
+                    NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
+                }
+            }
+        }
+        
+        // Update the previous state
+        previousPlaybackState = currentState
     }
     
     func updateNowPlayingItem() {
         if let mediaItem = musicPlayer.nowPlayingItem {
+            let songID = mediaItem.persistentID.stringValue
             title = mediaItem.title ?? "Unknown Title"
             artist = mediaItem.artist ?? "Unknown Artist"
             currentArtwork = mediaItem.artwork
             currentSong = Song(from: mediaItem)
             isVisible = true
+            
+            // If the same song is playing again (repeated)
+            if songID == currentSongID {
+                logger.log("Same song playing again - refreshing media library", level: .info)
+                
+                // Invalidate the cache to ensure fresh play count data
+                if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
+                    Task {
+                        await musicLibraryService.invalidateCache()
+                        // Post notification that others can observe
+                        NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
+                    }
+                }
+            }
+            
+            // Update current song ID
+            currentSongID = songID
         } else {
             isVisible = false
             currentSong = nil
             currentArtwork = nil
+            currentSongID = nil
         }
     }
     
