@@ -5,7 +5,6 @@ import Combine
 struct NowPlayingBar: View {
     @ObservedObject private var viewModel = NowPlayingViewModel.shared
     @EnvironmentObject var navigationManager: NavigationManager
-    @Environment(\.currentDetailSong) private var currentDetailSong
     @State private var currentImage: UIImage?
     @State private var isPressed = false
     
@@ -14,7 +13,7 @@ struct NowPlayingBar: View {
         guard let currentSong = viewModel.currentSong else { return false }
         
         // Check if we're currently viewing THIS specific song's detail page
-        return currentDetailSong?.id != currentSong.id
+        return navigationManager.currentDetailSong?.id != currentSong.id
     }
     
     var body: some View {
