@@ -28,42 +28,87 @@ struct NowPlayingBar: View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
                 HStack(spacing: AppSpacing.small) {
-                    // Custom artwork display logic matched exactly with ArtworkView
-                    Group {
-                        if let image = currentImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            Image(systemName: "music.note")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .padding(50 / 4) // Same as size/4 used in ArtworkView
-                                .foregroundColor(AppColors.secondaryText)
+                    // Left side: Artwork, rank, and song info (with navigation gestures)
+                    HStack(spacing: AppSpacing.small) {
+                        // Custom artwork display logic matched exactly with ArtworkView
+                        Group {
+                            if let image = currentImage {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Image(systemName: "music.note")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .padding(50 / 4) // Same as size/4 used in ArtworkView
+                                    .foregroundColor(AppColors.secondaryText)
+                            }
+                        }
+                        .frame(width: 50, height: 50)
+                        .background(AppColors.secondaryBackground) // Explicitly add background
+                        .cornerRadius(AppRadius.small)
+                        
+                        // Rank number - ensuring exact match with SongRowView
+                        Text("\(viewModel.songRank ?? 0)")
+                            .font(AppFonts.headline)
+                            .foregroundColor(AppColors.primary)
+                            .frame(width: 50, alignment: .center)
+                        
+                        // Song info - Using design system text components
+                        VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                            HeadlineText(text: viewModel.title)
+                                .lineLimit(1)
+                            
+                            SubheadlineText(text: viewModel.artist)
+                                .lineLimit(1)
                         }
                     }
-                    .frame(width: 50, height: 50)
-                    .background(AppColors.secondaryBackground) // Explicitly add background
-                    .cornerRadius(AppRadius.small)
-                    
-                    // Rank number - ensuring exact match with SongRowView
-                    Text("\(viewModel.songRank ?? 0)")
-                        .font(AppFonts.headline)
-                        .foregroundColor(AppColors.primary)
-                        .frame(width: 50, alignment: .center)
-                    
-                    // Song info - Using design system text components
-                    VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                        HeadlineText(text: viewModel.title)
-                            .lineLimit(1)
+                    // Apply navigation gestures only to the left portion
+                    .contentShape(Rectangle()) // Make the entire area tappable
+                    .scaleEffect(isPressed ? 0.98 : 1.0) // Visual feedback for press
+                    .animation(.easeInOut(duration: 0.1), value: isPressed)
+                    .onLongPressGesture(
+                        minimumDuration: 0.5,
+                        maximumDistance: 50
+                    ) {
+                        // Long press action - navigate to song detail view only if not already viewing it
+                        if shouldAllowNavigation {
+                            navigateToSongDetail()
+                        } else {
+                            // Provide error feedback that navigation is not available (already on that song's detail)
+                            AppHaptics.error()
+                        }
+                    } onPressingChanged: { pressing in
+                        // Handle press state changes
+                        isPressed = pressing
                         
-                        SubheadlineText(text: viewModel.artist)
-                            .lineLimit(1)
+                        if pressing {
+                            if shouldAllowNavigation {
+                                // Provide medium impact feedback when long press begins and navigation is allowed
+                                AppHaptics.mediumImpact()
+                            } else {
+                                // Provide light feedback when navigation is not allowed
+                                AppHaptics.lightImpact()
+                            }
+                        }
                     }
+                    .simultaneousGesture(
+                        // Add a tap gesture for quick access (optional - can be removed if only long press is desired)
+                        TapGesture()
+                            .onEnded { _ in
+                                // Quick tap - navigate only if allowed
+                                if shouldAllowNavigation {
+                                    navigateToSongDetail()
+                                } else {
+                                    // Provide error feedback that navigation is not available (already on that song's detail)
+                                    AppHaptics.error()
+                                }
+                            }
+                    )
                     
                     Spacer()
                     
-                    // Playback control buttons
+                    // Right side: Playback control buttons (no navigation gestures)
                     HStack(spacing: 0) {
                         // Previous button
                         Button(action: {
@@ -72,7 +117,7 @@ struct NowPlayingBar: View {
                         }) {
                             Image(systemName: "backward.fill")
                                 .font(.system(size: 18))
-                                .foregroundColor(AppColors.primaryText) // Changed from AppColors.black to AppColors.primaryText
+                                .foregroundColor(AppColors.primaryText)
                                 .frame(width: 36, height: 36)
                         }
                         
@@ -83,7 +128,7 @@ struct NowPlayingBar: View {
                         }) {
                             Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 22))
-                                .foregroundColor(AppColors.primaryText) // Changed from AppColors.black to AppColors.primaryText
+                                .foregroundColor(AppColors.primaryText)
                                 .frame(width: 44, height: 44)
                         }
                         
@@ -94,7 +139,7 @@ struct NowPlayingBar: View {
                         }) {
                             Image(systemName: "forward.fill")
                                 .font(.system(size: 18))
-                                .foregroundColor(AppColors.primaryText) // Changed from AppColors.black to AppColors.primaryText
+                                .foregroundColor(AppColors.primaryText)
                                 .frame(width: 36, height: 36)
                         }
                     }
@@ -105,46 +150,6 @@ struct NowPlayingBar: View {
                 .background(.ultraThinMaterial)
                 .cornerRadius(AppRadius.medium)
                 .appShadow(AppShadow.medium)
-                .scaleEffect(isPressed ? 0.98 : 1.0) // Visual feedback for press
-                .animation(.easeInOut(duration: 0.1), value: isPressed)
-                .onLongPressGesture(
-                    minimumDuration: 0.5,
-                    maximumDistance: 50
-                ) {
-                    // Long press action - navigate to song detail view only if not already viewing it
-                    if shouldAllowNavigation {
-                        navigateToSongDetail()
-                    } else {
-                        // Provide error feedback that navigation is not available (already on that song's detail)
-                        AppHaptics.error()
-                    }
-                } onPressingChanged: { pressing in
-                    // Handle press state changes
-                    isPressed = pressing
-                    
-                    if pressing {
-                        if shouldAllowNavigation {
-                            // Provide medium impact feedback when long press begins and navigation is allowed
-                            AppHaptics.mediumImpact()
-                        } else {
-                            // Provide light feedback when navigation is not allowed
-                            AppHaptics.lightImpact()
-                        }
-                    }
-                }
-                .simultaneousGesture(
-                    // Add a tap gesture for quick access (optional - can be removed if only long press is desired)
-                    TapGesture()
-                        .onEnded { _ in
-                            // Quick tap - navigate only if allowed
-                            if shouldAllowNavigation {
-                                navigateToSongDetail()
-                            } else {
-                                // Provide error feedback that navigation is not available (already on that song's detail)
-                                AppHaptics.error()
-                            }
-                        }
-                )
                 .padding(.horizontal, AppSpacing.medium)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))

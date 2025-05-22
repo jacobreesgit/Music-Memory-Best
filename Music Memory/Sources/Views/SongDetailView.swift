@@ -49,12 +49,8 @@ struct SongDetailView: View {
                             Image(systemName: "play.fill")
                             Text("Play")
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(AppColors.primary)
-                        .foregroundColor(.white)
-                        .cornerRadius(AppRadius.medium)
                     }
+                    .primaryStyle()
                     .padding(.top, AppSpacing.medium)
                 }
                 
