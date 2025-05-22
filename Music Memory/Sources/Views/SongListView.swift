@@ -43,6 +43,8 @@ struct SongListView: View {
         List {
             ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { index, song in
                 Button {
+                    // Provide success haptic feedback for successful navigation
+                    AppHaptics.success()
                     navigationManager.navigateToSongDetail(song: song)
                 } label: {
                     SongRowView(song: song, index: index)

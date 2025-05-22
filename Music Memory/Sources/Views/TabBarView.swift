@@ -6,6 +6,7 @@ struct TabBarView: View {
     @EnvironmentObject var navigationManager: NavigationManager
     @StateObject private var songListViewModel: SongListViewModel
     @Environment(\.isPreview) private var isPreview
+    @State private var selectedTab = 0
     
     // For preview support
     var previewMode: Bool
@@ -27,8 +28,8 @@ struct TabBarView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Main TabView
-            TabView {
+            // Main TabView with selection binding
+            TabView(selection: $selectedTab) {
                 // Library tab
                 NavigationStack(path: $navigationManager.songListPath) {
                     Group {
@@ -78,8 +79,22 @@ struct TabBarView: View {
                 .tabItem {
                     Label("Library", systemImage: "music.note.list")
                 }
+                .tag(0)
             }
             .accentColor(AppColors.primary)
+            .onChange(of: selectedTab) { oldValue, newValue in
+                // Detect when Library tab (0) is tapped
+                if newValue == 0 && oldValue == 0 {
+                    // User tapped Library tab while already on Library tab
+                    // Check if we're in a detail view (navigation path is not empty)
+                    if !navigationManager.songListPath.isEmpty {
+                        // Provide success haptic feedback for successful navigation back to root
+                        AppHaptics.success()
+                        // Pop to root when Library tab is tapped while in detail view
+                        navigationManager.popToRoot()
+                    }
+                }
+            }
             .alert(item: $appState.currentError) { error in
                 Alert(
                     title: Text("Error"),
