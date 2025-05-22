@@ -52,14 +52,37 @@ struct NowPlayingBar: View {
                         
                         Spacer()
                         
-                        // Play/Pause button - using system constants
-                        Button(action: {
-                            viewModel.togglePlayback()
-                        }) {
-                            Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(AppColors.primary)
-                                .frame(width: 44, height: 44)
+                        // Playback control buttons
+                        HStack(spacing: 0) {
+                            // Previous button
+                            Button(action: {
+                                viewModel.skipToPrevious()
+                            }) {
+                                Image(systemName: "backward.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(AppColors.black)
+                                    .frame(width: 36, height: 36)
+                            }
+                            
+                            // Play/Pause button
+                            Button(action: {
+                                viewModel.togglePlayback()
+                            }) {
+                                Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(AppColors.black)
+                                    .frame(width: 44, height: 44)
+                            }
+                            
+                            // Next button
+                            Button(action: {
+                                viewModel.skipToNext()
+                            }) {
+                                Image(systemName: "forward.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(AppColors.black)
+                                    .frame(width: 36, height: 36)
+                            }
                         }
                     }
                     .padding(.leading, 24) // Specify left padding
@@ -215,6 +238,18 @@ class NowPlayingViewModel: ObservableObject {
         musicPlayer.setQueue(with: descriptor)
         musicPlayer.prepareToPlay()
         musicPlayer.play()
+    }
+    
+    // MARK: - New playback control methods
+    
+    func skipToNext() {
+        logger.log("Skipping to next track", level: .info)
+        musicPlayer.skipToNextItem()
+    }
+    
+    func skipToPrevious() {
+        logger.log("Skipping to previous track", level: .info)
+        musicPlayer.skipToPreviousItem()
     }
 }
 

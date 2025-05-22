@@ -56,6 +56,9 @@ struct TabBarView: View {
                         }
                     }
                     .navigationTitle("Library")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarBackground(.visible, for: .navigationBar)
+                    .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
                     .navigationDestination(for: Song.self) { song in
                         SongDetailView(
                             viewModel: SongDetailViewModel(
