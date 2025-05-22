@@ -5,94 +5,140 @@ import Combine
 struct NowPlayingBar: View {
     @ObservedObject private var viewModel = NowPlayingViewModel.shared
     @EnvironmentObject var navigationManager: NavigationManager
+    @Environment(\.currentDetailSong) private var currentDetailSong
     @State private var currentImage: UIImage?
+    @State private var isPressed = false
+    
+    // Computed property to determine if we should allow navigation
+    private var shouldAllowNavigation: Bool {
+        guard let currentSong = viewModel.currentSong else { return false }
+        
+        // Check if we're currently viewing THIS specific song's detail page
+        return currentDetailSong?.id != currentSong.id
+    }
     
     var body: some View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
-                Button {
-                    // Navigate to song detail view when the now playing bar is tapped
-                    if let currentSong = viewModel.currentSong {
-                        navigationManager.navigateToSongDetail(song: currentSong)
-                    }
-                } label: {
-                    HStack(spacing: AppSpacing.small) {
-                        // Custom artwork display logic matched exactly with ArtworkView
-                        Group {
-                            if let image = currentImage {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                Image(systemName: "music.note")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .padding(50 / 4) // Same as size/4 used in ArtworkView
-                                    .foregroundColor(AppColors.secondaryText)
-                            }
-                        }
-                        .frame(width: 50, height: 50)
-                        .background(AppColors.secondaryBackground) // Explicitly add background
-                        .cornerRadius(AppRadius.small)
-                        
-                        // Rank number - ensuring exact match with SongRowView
-                        Text("\(viewModel.songRank ?? 0)")
-                            .font(AppFonts.headline)
-                            .foregroundColor(AppColors.primary)
-                            .frame(width: 50, alignment: .center)
-                        
-                        // Song info - Using design system text components
-                        VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                            HeadlineText(text: viewModel.title)
-                                .lineLimit(1)
-                            
-                            SubheadlineText(text: viewModel.artist)
-                                .lineLimit(1)
-                        }
-                        
-                        Spacer()
-                        
-                        // Playback control buttons
-                        HStack(spacing: 0) {
-                            // Previous button
-                            Button(action: {
-                                viewModel.skipToPrevious()
-                            }) {
-                                Image(systemName: "backward.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(AppColors.black)
-                                    .frame(width: 36, height: 36)
-                            }
-                            
-                            // Play/Pause button
-                            Button(action: {
-                                viewModel.togglePlayback()
-                            }) {
-                                Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(AppColors.black)
-                                    .frame(width: 44, height: 44)
-                            }
-                            
-                            // Next button
-                            Button(action: {
-                                viewModel.skipToNext()
-                            }) {
-                                Image(systemName: "forward.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(AppColors.black)
-                                    .frame(width: 36, height: 36)
-                            }
+                HStack(spacing: AppSpacing.small) {
+                    // Custom artwork display logic matched exactly with ArtworkView
+                    Group {
+                        if let image = currentImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            Image(systemName: "music.note")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .padding(50 / 4) // Same as size/4 used in ArtworkView
+                                .foregroundColor(AppColors.secondaryText)
                         }
                     }
-                    .padding(.leading, 24) // Specify left padding
-                    .padding(.trailing, 16) // Specify right padding
+                    .frame(width: 50, height: 50)
+                    .background(AppColors.secondaryBackground) // Explicitly add background
+                    .cornerRadius(AppRadius.small)
+                    
+                    // Rank number - ensuring exact match with SongRowView
+                    Text("\(viewModel.songRank ?? 0)")
+                        .font(AppFonts.headline)
+                        .foregroundColor(AppColors.primary)
+                        .frame(width: 50, alignment: .center)
+                    
+                    // Song info - Using design system text components
+                    VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                        HeadlineText(text: viewModel.title)
+                            .lineLimit(1)
+                        
+                        SubheadlineText(text: viewModel.artist)
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer()
+                    
+                    // Playback control buttons
+                    HStack(spacing: 0) {
+                        // Previous button
+                        Button(action: {
+                            viewModel.skipToPrevious()
+                        }) {
+                            Image(systemName: "backward.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(AppColors.black)
+                                .frame(width: 36, height: 36)
+                        }
+                        
+                        // Play/Pause button
+                        Button(action: {
+                            viewModel.togglePlayback()
+                        }) {
+                            Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(AppColors.black)
+                                .frame(width: 44, height: 44)
+                        }
+                        
+                        // Next button
+                        Button(action: {
+                            viewModel.skipToNext()
+                        }) {
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(AppColors.black)
+                                .frame(width: 36, height: 36)
+                        }
+                    }
                 }
-                .buttonStyle(PlainButtonStyle()) // Use plain style to avoid visual changes
+                .padding(.leading, 24) // Specify left padding
+                .padding(.trailing, 16) // Specify right padding
                 .padding(.vertical, AppSpacing.medium)
                 .background(.ultraThinMaterial)
                 .cornerRadius(AppRadius.medium)
                 .appShadow(AppShadow.medium)
+                .scaleEffect(isPressed ? 0.98 : 1.0) // Visual feedback for press
+                .animation(.easeInOut(duration: 0.1), value: isPressed)
+                .onLongPressGesture(
+                    minimumDuration: 0.5,
+                    maximumDistance: 50
+                ) {
+                    // Long press action - navigate to song detail view only if not already viewing it
+                    if shouldAllowNavigation {
+                        navigateToSongDetail()
+                    } else {
+                        // Provide subtle feedback that navigation is not available
+                        let notificationFeedback = UINotificationFeedbackGenerator()
+                        notificationFeedback.notificationOccurred(.warning)
+                    }
+                } onPressingChanged: { pressing in
+                    // Handle press state changes only if navigation is allowed
+                    if shouldAllowNavigation {
+                        isPressed = pressing
+                        
+                        if pressing {
+                            // Provide haptic feedback when long press begins
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
+                        }
+                    } else if pressing {
+                        // Provide different feedback when navigation is not allowed
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                    }
+                }
+                .simultaneousGesture(
+                    // Add a tap gesture for quick access (optional - can be removed if only long press is desired)
+                    TapGesture()
+                        .onEnded { _ in
+                            // Quick tap - navigate only if allowed
+                            if shouldAllowNavigation {
+                                navigateToSongDetail()
+                            } else {
+                                // Provide subtle feedback that navigation is not available
+                                let notificationFeedback = UINotificationFeedbackGenerator()
+                                notificationFeedback.notificationOccurred(.warning)
+                            }
+                        }
+                )
                 .padding(.horizontal, AppSpacing.medium)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -104,6 +150,20 @@ struct NowPlayingBar: View {
                 updateArtwork(viewModel.currentArtwork)
             }
         }
+    }
+    
+    private func navigateToSongDetail() {
+        // Navigate to song detail view when the now playing bar is interacted with
+        guard let currentSong = viewModel.currentSong else { return }
+        
+        // Double-check that navigation is allowed (defensive programming)
+        guard shouldAllowNavigation else { return }
+        
+        // Provide confirmation haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        navigationManager.navigateToSongDetail(song: currentSong)
     }
     
     private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
