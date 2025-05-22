@@ -16,6 +16,14 @@ struct NowPlayingBar: View {
         return navigationManager.currentDetailSong?.id != currentSong.id
     }
     
+    /*
+     Haptic Feedback Patterns used in this view:
+     - AppHaptics.success(): When successfully navigating to song detail
+     - AppHaptics.error(): When blocked from navigating (already on that song's detail)
+     - AppHaptics.mediumImpact(): Play/pause button and long press begin
+     - AppHaptics.lightImpact(): Previous/next buttons and blocked press feedback
+     */
+    
     var body: some View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
@@ -59,31 +67,34 @@ struct NowPlayingBar: View {
                     HStack(spacing: 0) {
                         // Previous button
                         Button(action: {
+                            AppHaptics.lightImpact()
                             viewModel.skipToPrevious()
                         }) {
                             Image(systemName: "backward.fill")
                                 .font(.system(size: 18))
-                                .foregroundColor(AppColors.black)
+                                .foregroundColor(AppColors.primaryText) // Changed from AppColors.black to AppColors.primaryText
                                 .frame(width: 36, height: 36)
                         }
                         
                         // Play/Pause button
                         Button(action: {
+                            AppHaptics.mediumImpact()
                             viewModel.togglePlayback()
                         }) {
                             Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 22))
-                                .foregroundColor(AppColors.black)
+                                .foregroundColor(AppColors.primaryText) // Changed from AppColors.black to AppColors.primaryText
                                 .frame(width: 44, height: 44)
                         }
                         
                         // Next button
                         Button(action: {
+                            AppHaptics.lightImpact()
                             viewModel.skipToNext()
                         }) {
                             Image(systemName: "forward.fill")
                                 .font(.system(size: 18))
-                                .foregroundColor(AppColors.black)
+                                .foregroundColor(AppColors.primaryText) // Changed from AppColors.black to AppColors.primaryText
                                 .frame(width: 36, height: 36)
                         }
                     }
@@ -104,24 +115,21 @@ struct NowPlayingBar: View {
                     if shouldAllowNavigation {
                         navigateToSongDetail()
                     } else {
-                        // Provide subtle feedback that navigation is not available
-                        let notificationFeedback = UINotificationFeedbackGenerator()
-                        notificationFeedback.notificationOccurred(.warning)
+                        // Provide error feedback that navigation is not available (already on that song's detail)
+                        AppHaptics.error()
                     }
                 } onPressingChanged: { pressing in
-                    // Handle press state changes only if navigation is allowed
-                    if shouldAllowNavigation {
-                        isPressed = pressing
-                        
-                        if pressing {
-                            // Provide haptic feedback when long press begins
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                            impactFeedback.impactOccurred()
+                    // Handle press state changes
+                    isPressed = pressing
+                    
+                    if pressing {
+                        if shouldAllowNavigation {
+                            // Provide medium impact feedback when long press begins and navigation is allowed
+                            AppHaptics.mediumImpact()
+                        } else {
+                            // Provide light feedback when navigation is not allowed
+                            AppHaptics.lightImpact()
                         }
-                    } else if pressing {
-                        // Provide different feedback when navigation is not allowed
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
                     }
                 }
                 .simultaneousGesture(
@@ -132,9 +140,8 @@ struct NowPlayingBar: View {
                             if shouldAllowNavigation {
                                 navigateToSongDetail()
                             } else {
-                                // Provide subtle feedback that navigation is not available
-                                let notificationFeedback = UINotificationFeedbackGenerator()
-                                notificationFeedback.notificationOccurred(.warning)
+                                // Provide error feedback that navigation is not available (already on that song's detail)
+                                AppHaptics.error()
                             }
                         }
                 )
@@ -158,9 +165,8 @@ struct NowPlayingBar: View {
         // Double-check that navigation is allowed (defensive programming)
         guard shouldAllowNavigation else { return }
         
-        // Provide confirmation haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
+        // Provide success haptic feedback for successful navigation
+        AppHaptics.success()
         
         navigationManager.navigateToSongDetail(song: currentSong)
     }

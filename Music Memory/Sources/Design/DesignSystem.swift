@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Colors
 enum AppColors {
@@ -129,6 +130,51 @@ struct AppShadow {
     )
 }
 
+// MARK: - Haptic Feedback
+enum AppHaptics {
+    /// Success haptic - for successful actions like navigation, completion
+    static func success() {
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(.success)
+    }
+    
+    /// Error haptic - for failed actions, restrictions, errors
+    static func error() {
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(.error)
+    }
+    
+    /// Warning haptic - for warnings, cautions, blocked actions
+    static func warning() {
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(.warning)
+    }
+    
+    /// Light impact - for subtle interactions, previews, hover states
+    static func lightImpact() {
+        let feedback = UIImpactFeedbackGenerator(style: .light)
+        feedback.impactOccurred()
+    }
+    
+    /// Medium impact - for standard interactions, button presses, selections
+    static func mediumImpact() {
+        let feedback = UIImpactFeedbackGenerator(style: .medium)
+        feedback.impactOccurred()
+    }
+    
+    /// Heavy impact - for significant interactions, important actions
+    static func heavyImpact() {
+        let feedback = UIImpactFeedbackGenerator(style: .heavy)
+        feedback.impactOccurred()
+    }
+    
+    /// Selection changed - for picker changes, selection feedback
+    static func selectionChanged() {
+        let feedback = UISelectionFeedbackGenerator()
+        feedback.selectionChanged()
+    }
+}
+
 // MARK: - View Extensions
 extension View {
     // Apply shadow from the design system
@@ -169,6 +215,11 @@ struct PrimaryButtonStyle: ButtonStyle {
             .cornerRadius(AppRadius.medium)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
             .appShadow(AppShadow.small)
+            .onChange(of: configuration.isPressed) { oldValue, newValue in
+                if newValue {
+                    AppHaptics.lightImpact()
+                }
+            }
     }
 }
 
@@ -182,6 +233,11 @@ struct SecondaryButtonStyle: ButtonStyle {
             .background(AppColors.secondaryBackground)
             .cornerRadius(AppRadius.medium)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .onChange(of: configuration.isPressed) { oldValue, newValue in
+                if newValue {
+                    AppHaptics.lightImpact()
+                }
+            }
     }
 }
 
@@ -195,6 +251,11 @@ struct DestructiveButtonStyle: ButtonStyle {
             .background(AppColors.destructive)
             .cornerRadius(AppRadius.medium)
             .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .onChange(of: configuration.isPressed) { oldValue, newValue in
+                if newValue {
+                    AppHaptics.mediumImpact()
+                }
+            }
     }
 }
 

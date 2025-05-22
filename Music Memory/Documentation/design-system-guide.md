@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This design system guide provides a standardized framework for maintaining visual and functional consistency throughout the Music Memory application. It serves as a reference for all team members to ensure that UI components, colors, typography, and spacing remain consistent across all parts of the application.
+This design system guide provides a standardized framework for maintaining visual and functional consistency throughout the Music Memory application. It serves as a reference for all team members to ensure that UI components, colors, typography, spacing, and haptic feedback remain consistent across all parts of the application.
 
 ## Table of Contents
 
@@ -11,12 +11,13 @@ This design system guide provides a standardized framework for maintaining visua
 3. [Spacing & Layout](#spacing--layout)
 4. [Corner Radius](#corner-radius)
 5. [Shadows](#shadows)
-6. [Components](#components)
+6. [Haptic Feedback](#haptic-feedback)
+7. [Components](#components)
    - [Buttons](#buttons)
    - [Text Components](#text-components)
    - [Media Components](#media-components)
-7. [Usage Guidelines](#usage-guidelines)
-8. [Implementation Examples](#implementation-examples)
+8. [Usage Guidelines](#usage-guidelines)
+9. [Implementation Examples](#implementation-examples)
 
 ## Colors
 
@@ -160,6 +161,87 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 | `medium` | `color: black.opacity(0.15), radius: 8, x: 0, y: 4` | Moderate elevation, popovers |
 | `large` | `color: black.opacity(0.2), radius: 16, x: 0, y: 8` | Significant elevation, modals |
 
+## Haptic Feedback
+
+### Feedback Types
+
+| Name | UIKit Type | Description | Usage |
+|------|------------|-------------|-------|
+| `success()` | `UINotificationFeedbackGenerator(.success)` | Positive confirmation | Successful actions, navigation, completion |
+| `error()` | `UINotificationFeedbackGenerator(.error)` | Negative feedback | Failed actions, errors, restrictions |
+| `warning()` | `UINotificationFeedbackGenerator(.warning)` | Cautionary feedback | Warnings, blocked actions, alerts |
+| `lightImpact()` | `UIImpactFeedbackGenerator(.light)` | Subtle interaction | Minor interactions, previews, hover states |
+| `mediumImpact()` | `UIImpactFeedbackGenerator(.medium)` | Standard interaction | Button presses, selections, important actions |
+| `heavyImpact()` | `UIImpactFeedbackGenerator(.heavy)` | Strong interaction | Significant actions, confirmations |
+| `selectionChanged()` | `UISelectionFeedbackGenerator()` | Selection feedback | Picker changes, list selections |
+
+### Haptic Usage Guidelines
+
+#### When to Use Each Type
+
+**Success Haptics:**
+- Navigation completed successfully
+- Form submission succeeded
+- Operation completed
+- Permission granted
+
+**Error Haptics:**
+- Action blocked or failed
+- Permission denied
+- Invalid input
+- Already in target state
+
+**Warning Haptics:**
+- Potentially destructive action
+- Temporary unavailability
+- Rate limiting
+- Approaching limits
+
+**Impact Haptics:**
+- Light: Secondary buttons, subtle interactions
+- Medium: Primary buttons, important selections
+- Heavy: Destructive actions, major confirmations
+
+**Selection Haptics:**
+- Segmented control changes
+- Picker wheel selections
+- Tab switching
+- Filter changes
+
+#### Haptic Design Principles
+
+1. **Consistency**: Use the same haptic for the same type of action across the app
+2. **Semantic Meaning**: Match haptic intensity to action importance
+3. **User Control**: Respect accessibility settings that disable haptics
+4. **Restraint**: Don't overuse haptics - they should enhance, not overwhelm
+5. **Context Awareness**: Consider the user's environment and device state
+
+### Haptic Implementation Examples
+
+```swift
+// Successful navigation
+AppHaptics.success()
+navigationManager.navigateToSongDetail(song: song)
+
+// Blocked action
+if !canPerformAction {
+    AppHaptics.error()
+    return
+}
+
+// Button interaction
+Button("Play Song") {
+    AppHaptics.mediumImpact()
+    playSong()
+}
+
+// Destructive action
+Button("Delete Playlist") {
+    AppHaptics.heavyImpact()
+    deletePlaylist()
+}
+```
+
 ## Components
 
 ### Buttons
@@ -171,6 +253,7 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 - Padding: `AppSpacing.medium`
 - Corner Radius: `AppRadius.medium`
 - Shadow: `AppShadow.small`
+- Haptic: `AppHaptics.lightImpact()` on press
 
 #### Secondary Button
 - Background: `AppColors.secondaryBackground`
@@ -179,6 +262,7 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 - Padding: `AppSpacing.medium`
 - Corner Radius: `AppRadius.medium`
 - Shadow: None
+- Haptic: `AppHaptics.lightImpact()` on press
 
 #### Destructive Button
 - Background: `AppColors.destructive`
@@ -187,8 +271,7 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 - Padding: `AppSpacing.medium`
 - Corner Radius: `AppRadius.medium`
 - Shadow: None
-
-
+- Haptic: `AppHaptics.mediumImpact()` on press
 
 ### Text Components
 
@@ -233,6 +316,7 @@ PlayCountView(count: song.playCount)
 2. **Accessibility**: Ensure all UI elements are accessible with appropriate sizing
 3. **Responsiveness**: Design components should adapt to different screen sizes
 4. **Dark Mode**: All components should support both light and dark mode
+5. **Haptic Feedback**: Provide appropriate tactile feedback for user interactions
 
 ### Specific Component Guidelines
 
@@ -240,6 +324,7 @@ PlayCountView(count: song.playCount)
    - Use primary buttons for main actions
    - Use secondary buttons for alternative actions
    - Use destructive buttons for potentially harmful actions
+   - Always include appropriate haptic feedback
 
 2. **Typography**:
    - Maintain a clear hierarchy with font sizes and weights
@@ -251,23 +336,63 @@ PlayCountView(count: song.playCount)
    - Apply appropriate padding for different screen sizes
    - Follow the spacing guidelines for component relationships
 
+4. **Haptic Feedback**:
+   - Match haptic intensity to action importance
+   - Use semantic haptic types (success, error, warning)
+   - Be consistent across similar interactions
+   - Test on actual devices, not simulator
+
 ## Implementation Examples
 
-### Button Usage
+### Button Usage with Haptics
 
 ```swift
-// Primary action button
-Button("Allow Access", action: onRequest)
-    .primaryStyle()
-    .horizontalPadding(AppSpacing.extraLarge)
+// Primary action button with success haptic
+Button("Allow Access") {
+    AppHaptics.success()
+    onRequest()
+}
+.primaryStyle()
+.horizontalPadding(AppSpacing.extraLarge)
 
-// Secondary action button
-Button("Try Again", action: onRetry)
-    .secondaryStyle()
+// Secondary action button 
+Button("Try Again") {
+    AppHaptics.mediumImpact()
+    onRetry()
+}
+.secondaryStyle()
 
 // Destructive action button
-Button("Delete", action: onDelete)
-    .destructiveStyle()
+Button("Delete") {
+    AppHaptics.heavyImpact()
+    onDelete()
+}
+.destructiveStyle()
+```
+
+### Interactive Component with Contextual Haptics
+
+```swift
+Button {
+    if canNavigate {
+        AppHaptics.success()
+        navigateToDetail()
+    } else {
+        AppHaptics.error()
+        // Show feedback that action is blocked
+    }
+} label: {
+    SongRowView(song: song)
+}
+.onLongPressGesture {
+    if isAvailable {
+        AppHaptics.mediumImpact()
+        showContextMenu()
+    } else {
+        AppHaptics.warning()
+        showUnavailableMessage()
+    }
+}
 ```
 
 ### Text Component Usage
@@ -299,4 +424,32 @@ VStack(spacing: AppSpacing.large) {
         .horizontalPadding(AppSpacing.medium)
 }
 .background(AppColors.background)
+```
+
+### Complex Interaction with Multiple Haptic States
+
+```swift
+// Now Playing Bar interaction example
+struct NowPlayingBar: View {
+    var body: some View {
+        // ... UI code ...
+        .onTapGesture {
+            if shouldAllowNavigation {
+                AppHaptics.success()
+                navigateToSongDetail()
+            } else {
+                AppHaptics.error()
+                // Already viewing this song's detail
+            }
+        }
+        .onLongPressGesture { 
+            AppHaptics.mediumImpact()
+            // Long press began
+        } onPressingChanged: { pressing in
+            if pressing && shouldAllowNavigation {
+                AppHaptics.lightImpact()
+            }
+        }
+    }
+}
 ```
