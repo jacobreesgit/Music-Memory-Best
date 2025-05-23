@@ -10,15 +10,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
     
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // When app comes back to foreground, refresh the library
-        logger.log("App will enter foreground - posting media library changed notification", level: .info)
-        NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
-        
-        // Check permission status when returning to foreground
-        checkPermissionStatus()
-    }
-    
     private func setupApp() {
         logger.log("Application did finish launching", level: .info)
         
@@ -41,9 +32,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Check initial permission status
         checkPermissionStatus()
-        
-        // Start listening for media library changes
-        MPMediaLibrary.default().beginGeneratingLibraryChangeNotifications()
     }
     
     private func checkPermissionStatus() {
@@ -68,15 +56,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             guard let error = notification.object as? AppError else { return }
             self?.handleAppError(error)
         }
-        
-        // Handle media library changes
-        NotificationCenter.default.addObserver(
-            forName: .MPMediaLibraryDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.handleMediaLibraryChange()
-        }
     }
     
     private func handleAppError(_ error: AppError) {
@@ -87,19 +66,4 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             self.appState?.setError(error)
         }
     }
-    
-    private func handleMediaLibraryChange() {
-        logger.log("Media library changed - posting notification", level: .info)
-        
-        // Post our custom notification that will trigger a refresh
-        NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
-    }
-    
-    deinit {
-        MPMediaLibrary.default().endGeneratingLibraryChangeNotifications()
-    }
-}
-
-extension NSNotification.Name {
-    static let mediaLibraryChanged = NSNotification.Name("mediaLibraryChanged")
 }

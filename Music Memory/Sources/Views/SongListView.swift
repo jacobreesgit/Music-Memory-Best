@@ -52,9 +52,6 @@ struct SongListView: View {
                 .buttonStyle(.plain)
             }
         }
-        .refreshable {
-            await viewModel.loadSongs()
-        }
         .overlay(
             Group {
                 if viewModel.songs.isEmpty && !viewModel.isLoading {

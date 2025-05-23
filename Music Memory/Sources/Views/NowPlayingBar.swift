@@ -20,7 +20,7 @@ struct NowPlayingBar: View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
                 HStack(spacing: AppSpacing.small) {
-                    // Left side: Artwork, rank, and song info (with navigation gestures)
+                    // Left side: Artwork and song info (with navigation gestures)
                     HStack(spacing: AppSpacing.small) {
                         // Custom artwork display logic matched exactly with ArtworkView
                         Group {
@@ -39,12 +39,6 @@ struct NowPlayingBar: View {
                         .frame(width: 50, height: 50)
                         .background(AppColors.secondaryBackground) // Explicitly add background
                         .cornerRadius(AppRadius.small)
-                        
-                        // Rank number - ensuring exact match with SongRowView
-                        Text("\(viewModel.songRank ?? 0)")
-                            .font(AppFonts.headline)
-                            .foregroundColor(AppColors.primary)
-                            .frame(width: 50, alignment: .center)
                         
                         // Song info - Using design system text components
                         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
@@ -191,11 +185,9 @@ class NowPlayingViewModel: ObservableObject {
     @Published var artist = ""
     @Published var currentArtwork: MPMediaItemArtwork?
     @Published var currentSong: Song?
-    @Published var songRank: Int? = nil
     
     private var logger = Logger()
     private var cancellables = Set<AnyCancellable>()
-    private var previousPlayingItem: MPMediaItem?
     
     init() {
         setupObservers()
@@ -225,16 +217,6 @@ class NowPlayingViewModel: ObservableObject {
                 self?.updateNowPlayingItem()
             }
             .store(in: &cancellables)
-        
-        // Listen for song list updates to update rank
-        NotificationCenter.default.publisher(for: .songsListUpdated)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] notification in
-                if let songs = notification.object as? [Song] {
-                    self?.updateSongRank(songs: songs)
-                }
-            }
-            .store(in: &cancellables)
     }
     
     func checkCurrentlyPlaying() {
@@ -243,54 +225,15 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     func updatePlaybackState() {
-        let oldState = isPlaying
         isPlaying = musicPlayer.playbackState == .playing
-        
-        // Check if we just finished playing a song
-        if oldState && !isPlaying && musicPlayer.playbackState == .stopped {
-            handleSongFinished()
-        }
     }
     
     func handlePlaybackStateChange() {
         updatePlaybackState()
     }
     
-    func handleSongFinished() {
-        guard let currentSong = currentSong else { return }
-        
-        logger.log("Song finished playing: \(currentSong.title)", level: .info)
-        
-        // Schedule refresh for just this song
-        for delay in [3.0, 5.0, 8.0, 12.0] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.logger.log("Refreshing song (attempt at \(delay)s): \(currentSong.id)", level: .info)
-                NotificationCenter.default.post(name: .refreshSingleSong, object: currentSong.id)
-            }
-        }
-    }
-    
     func updateNowPlayingItem() {
         let currentItem = musicPlayer.nowPlayingItem
-        
-        // Check if the song actually changed
-        if let previousItem = previousPlayingItem,
-           let currentItem = currentItem,
-           previousItem.persistentID != currentItem.persistentID {
-            // Song changed
-            logger.log("Song changed from \(previousItem.title ?? "Unknown") to \(currentItem.title ?? "Unknown")", level: .info)
-            
-            // If we had a previous song, refresh its play count
-            if let previousSong = Song(from: previousItem) as Song? {
-                for delay in [3.0, 5.0, 8.0] {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                        NotificationCenter.default.post(name: .refreshSingleSong, object: previousSong.id)
-                    }
-                }
-            }
-        }
-        
-        previousPlayingItem = currentItem
         
         if let mediaItem = currentItem {
             title = mediaItem.title ?? "Unknown Title"
@@ -302,21 +245,6 @@ class NowPlayingViewModel: ObservableObject {
             isVisible = false
             currentSong = nil
             currentArtwork = nil
-            songRank = nil
-        }
-    }
-    
-    func updateSongRank(songs: [Song]) {
-        guard let currentSong = currentSong else {
-            songRank = nil
-            return
-        }
-        
-        // Find the index of the current song in the song list (sorted by play count)
-        if let index = songs.firstIndex(where: { $0.id == currentSong.id }) {
-            songRank = index + 1
-        } else {
-            songRank = nil
         }
     }
     
@@ -345,10 +273,4 @@ class NowPlayingViewModel: ObservableObject {
         logger.log("Skipping to previous track", level: .info)
         musicPlayer.skipToPreviousItem()
     }
-}
-
-// Extend NSNotification.Name for song rank updates
-extension NSNotification.Name {
-    static let requestSongRankUpdate = NSNotification.Name("requestSongRankUpdate")
-    static let songsListUpdated = NSNotification.Name("songsListUpdated")
 }

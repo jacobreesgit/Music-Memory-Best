@@ -21,7 +21,6 @@ class SongDetailViewModel: ObservableObject {
     @Published var fileSize: String
     
     private let logger: LoggerProtocol
-    private var cancellables = Set<AnyCancellable>()
     
     init(song: Song, logger: LoggerProtocol) {
         self.song = song
@@ -44,38 +43,6 @@ class SongDetailViewModel: ObservableObject {
         extractMetadata()
         
         // Load artwork
-        loadArtwork()
-        
-        // Listen for song list updates to refresh this song's data
-        setupNotificationHandlers()
-    }
-    
-    private func setupNotificationHandlers() {
-        // Listen for song list updates
-        NotificationCenter.default.publisher(for: .songsListUpdated)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] notification in
-                guard let songs = notification.object as? [Song],
-                      let self = self else { return }
-                
-                // Find our song in the updated list
-                if let updatedSong = songs.first(where: { $0.id == self.song.id }) {
-                    self.updateSong(updatedSong)
-                }
-            }
-            .store(in: &cancellables)
-    }
-    
-    private func updateSong(_ updatedSong: Song) {
-        logger.log("Updating song details for: \(updatedSong.title)", level: .info)
-        
-        // Update the song
-        self.song = updatedSong
-        
-        // Re-extract metadata with the updated song
-        extractMetadata()
-        
-        // Reload artwork in case it changed
         loadArtwork()
     }
     
