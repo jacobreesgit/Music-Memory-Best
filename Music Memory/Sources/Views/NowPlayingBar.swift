@@ -20,7 +20,7 @@ struct NowPlayingBar: View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
                 HStack(spacing: AppSpacing.small) {
-                    // Left side: Artwork, rank, and song info (with navigation gestures)
+                    // Clickable area: Artwork, rank, song info, and spacer
                     HStack(spacing: AppSpacing.small) {
                         // Custom artwork display logic matched exactly with ArtworkView
                         Group {
@@ -32,12 +32,12 @@ struct NowPlayingBar: View {
                                 Image(systemName: "music.note")
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .padding(45 / 4) // Updated to match new size
+                                    .padding(45 / 4)
                                     .foregroundColor(AppColors.secondaryText)
                             }
                         }
-                        .frame(width: 45, height: 45) // Updated from 50x50 to 45x45
-                        .background(AppColors.secondaryBackground) // Explicitly add background
+                        .frame(width: 45, height: 45)
+                        .background(AppColors.secondaryBackground)
                         .cornerRadius(AppRadius.small)
                         
                         // Rank number - using dynamic width based on digit count
@@ -75,8 +75,11 @@ struct NowPlayingBar: View {
                                 }
                             }
                         }
+                        
+                        // Spacer is now part of the clickable area
+                        Spacer()
                     }
-                    // Apply navigation gestures only to the left portion
+                    // Apply navigation gestures to the entire left area including spacer
                     .contentShape(Rectangle()) // Make the entire area tappable
                     .scaleEffect(isPressed ? 0.98 : 1.0) // Visual feedback for press
                     .animation(.easeInOut(duration: 0.1), value: isPressed)
@@ -106,7 +109,7 @@ struct NowPlayingBar: View {
                         }
                     }
                     .simultaneousGesture(
-                        // Add a tap gesture for quick access (optional - can be removed if only long press is desired)
+                        // Add a tap gesture for quick access
                         TapGesture()
                             .onEnded { _ in
                                 // Quick tap - navigate only if allowed
@@ -119,9 +122,7 @@ struct NowPlayingBar: View {
                             }
                     )
                     
-                    Spacer()
-                    
-                    // Right side: Playback control buttons (no navigation gestures) - removed previous button
+                    // Right side: Playback control buttons (NOT clickable for navigation)
                     HStack(spacing: 0) {
                         // Play/Pause button
                         Button(action: {
