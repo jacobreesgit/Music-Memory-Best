@@ -26,7 +26,7 @@ struct SongRowView: View {
             Button(action: onPlay) {
                 ArtworkView(
                     artwork: song.artwork,
-                    size: 50,
+                    size: 45,
                     isCurrentlyPlaying: isCurrentlyPlaying,
                     isActivelyPlaying: isActivelyPlaying
                 )
@@ -47,7 +47,7 @@ struct SongRowView: View {
                         // Use smaller, sleeker fonts matching now playing bar
                         Text(song.title)
                             .font(AppFonts.callout)
-                            .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.medium)
+                            .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
                             .foregroundColor(AppColors.primaryText)
                             .lineLimit(1)
 
@@ -65,7 +65,7 @@ struct SongRowView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.vertical, AppSpacing.tiny)
+        .padding(.vertical, 0) // Removed all vertical padding from the row
     }
 }
 
@@ -91,6 +91,7 @@ struct SongListView: View {
                         navigationManager.navigateToSongDetail(song: song)
                     }
                 )
+                .listRowInsets(EdgeInsets(top: AppSpacing.small, leading: 16, bottom: AppSpacing.small, trailing: 16))
             }
         }
         .overlay(
@@ -121,10 +122,13 @@ struct PlayCountView: View {
     var body: some View {
         VStack {
             Text("\(count)")
-                .font(AppFonts.headline)
+                .font(AppFonts.callout)
+                .fontWeight(AppFontWeight.medium)
                 .foregroundColor(count > 0 ? AppColors.primaryText : AppColors.secondaryText)
             
-            CaptionText(text: "plays")
+            Text("plays")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.secondaryText)
         }
     }
 }

@@ -32,11 +32,11 @@ struct NowPlayingBar: View {
                                 Image(systemName: "music.note")
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                                    .padding(50 / 4) // Same as size/4 used in ArtworkView
+                                    .padding(45 / 4) // Updated to match new size
                                     .foregroundColor(AppColors.secondaryText)
                             }
                         }
-                        .frame(width: 50, height: 50)
+                        .frame(width: 45, height: 45) // Updated from 50x50 to 45x45
                         .background(AppColors.secondaryBackground) // Explicitly add background
                         .cornerRadius(AppRadius.small)
                         
@@ -146,9 +146,9 @@ struct NowPlayingBar: View {
                         }
                     }
                 }
-                .padding(.leading, 24) // Specify left padding
+                .padding(.leading, 20) // Specify left padding
                 .padding(.trailing, 16) // Specify right padding
-                .padding(.vertical, AppSpacing.medium)
+                .padding(.vertical, AppSpacing.small)
                 .background(.ultraThinMaterial)
                 .cornerRadius(AppRadius.medium)
                 .appShadow(AppShadow.medium)
@@ -180,7 +180,7 @@ struct NowPlayingBar: View {
     
     private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
         if let artwork = artwork {
-            currentImage = artwork.image(at: CGSize(width: 50, height: 50))
+            currentImage = artwork.image(at: CGSize(width: 45, height: 45)) // Updated from 50x50 to 45x45
         } else {
             currentImage = nil
         }
