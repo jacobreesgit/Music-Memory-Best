@@ -40,8 +40,8 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
             throw AppError.noMediaItemsFound
         }
         
+        // Return songs without sorting - sorting is now handled by the view model
         let songs = mediaItems.map { Song(from: $0) }
-            .sorted(by: { $0.playCount > $1.playCount })
         
         logger.log("Fetched \(songs.count) songs from music library", level: .info)
         

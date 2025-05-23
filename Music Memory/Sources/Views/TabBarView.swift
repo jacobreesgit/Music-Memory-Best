@@ -60,6 +60,14 @@ struct TabBarView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbarBackground(.visible, for: .navigationBar)
                     .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            // Only show sort button when we have songs to sort
+                            if !songListViewModel.songs.isEmpty {
+                                SortMenuView(viewModel: songListViewModel)
+                            }
+                        }
+                    }
                     .navigationDestination(for: Song.self) { song in
                         SongDetailView(
                             viewModel: SongDetailViewModel(
@@ -136,6 +144,42 @@ struct TabBarView: View {
             if !songListViewModel.songs.isEmpty {
                 NowPlayingViewModel.shared.updateSongsList(songListViewModel.songs)
             }
+        }
+    }
+}
+
+struct SortMenuView: View {
+    @ObservedObject var viewModel: SongListViewModel
+    
+    var body: some View {
+        Menu {
+            // Sort by options with direction indicators
+            ForEach(SortOption.allCases, id: \.self) { option in
+                Button {
+                    viewModel.updateSortOption(option)
+                } label: {
+                    HStack {
+                        Label(option.rawValue, systemImage: option.systemImage)
+                        
+                        Spacer()
+                        
+                        // Show current direction for selected option
+                        if viewModel.sortOption == option {
+                            Image(systemName: viewModel.sortDirection.systemImage)
+                        }
+                    }
+                }
+            }
+        } label: {
+            // Show current sort option icon and direction in the toolbar button
+            HStack(spacing: AppSpacing.tiny) {
+                Image(systemName: viewModel.sortOption.systemImage)
+                    .font(.system(size: 16))
+                
+                Image(systemName: viewModel.sortDirection.systemImage)
+                    .font(.system(size: 14))
+            }
+            .foregroundColor(AppColors.primary)
         }
     }
 }

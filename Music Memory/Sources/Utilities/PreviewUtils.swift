@@ -34,7 +34,7 @@ class PreviewMusicLibraryService: MusicLibraryServiceProtocol {
     }
     
     func fetchSongs() async throws -> [Song] {
-        // Immediately returns the mock songs without simulating any async behavior
+        // Return mock songs without sorting - sorting is now handled by the view model
         return mockSongs
     }
     
@@ -99,7 +99,10 @@ struct PreviewSongFactory {
     static let mockSongs = [
         createMockSong(id: "1", title: "Bohemian Rhapsody", artist: "Queen", album: "A Night at the Opera", playCount: 42),
         createMockSong(id: "2", title: "Hotel California", artist: "Eagles", album: "Hotel California", playCount: 35),
-        createMockSong(id: "3", title: "Hey Jude", artist: "The Beatles", album: "The Beatles (White Album)", playCount: 28)
+        createMockSong(id: "3", title: "Hey Jude", artist: "The Beatles", album: "The Beatles (White Album)", playCount: 28),
+        createMockSong(id: "4", title: "Stairway to Heaven", artist: "Led Zeppelin", album: "Led Zeppelin IV", playCount: 31),
+        createMockSong(id: "5", title: "Imagine", artist: "John Lennon", album: "Imagine", playCount: 19),
+        createMockSong(id: "6", title: "Billie Jean", artist: "Michael Jackson", album: "Thriller", playCount: 25)
     ]
     
     static func createMockSong(id: String, title: String, artist: String, album: String, playCount: Int) -> Song {
