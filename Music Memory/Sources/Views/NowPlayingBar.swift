@@ -40,30 +40,36 @@ struct NowPlayingBar: View {
                         .background(AppColors.secondaryBackground) // Explicitly add background
                         .cornerRadius(AppRadius.small)
                         
-                        // Rank number - using same styling as song list
+                        // Rank number - using dynamic width based on digit count
                         if let rank = viewModel.currentSongRank {
                             Text("\(rank)")
-                                .font(AppFonts.headline)
+                                .font(AppFonts.callout)
+                                .fontWeight(AppFontWeight.semibold)
                                 .foregroundColor(AppColors.primary)
-                                .frame(width: 50, alignment: .center)
+                                .frame(width: rank >= 1000 ? 60 : 50, alignment: .center)
                         }
                         
-                        // Song info - Using design system text components
+                        // Song info - Using smaller design system text components for compact space
                         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                            HeadlineText(text: viewModel.title)
+                            Text(viewModel.title)
+                                .font(AppFonts.callout)
+                                .fontWeight(AppFontWeight.medium)
+                                .foregroundColor(AppColors.primaryText)
                                 .lineLimit(1)
                             
                             HStack(spacing: AppSpacing.tiny) {
-                                SubheadlineText(text: viewModel.artist)
+                                Text(viewModel.artist)
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.secondaryText)
                                     .lineLimit(1)
                                 
                                 if let currentSong = viewModel.currentSong {
                                     Text("•")
-                                        .font(AppFonts.subheadline)
+                                        .font(AppFonts.caption)
                                         .foregroundColor(AppColors.secondaryText)
                                     
                                     Text("\(currentSong.playCount) plays")
-                                        .font(AppFonts.subheadline)
+                                        .font(AppFonts.caption)
                                         .foregroundColor(AppColors.secondaryText)
                                         .lineLimit(1)
                                 }

@@ -38,21 +38,22 @@ struct SongRowView: View {
             Button(action: onNavigate) {
                 HStack(spacing: AppSpacing.small) {
                     Text("\(index + 1)")
-                        .font(AppFonts.headline)
+                        .font(AppFonts.callout)
+                        .fontWeight(AppFontWeight.semibold)
                         .foregroundColor(AppColors.primary)
-                        .frame(width: 50, alignment: .center)
+                        .frame(width: (index + 1) >= 1000 ? 47 : 37, alignment: .center)
                     
                     VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                        // Use HeadlineText for currently playing song, BodyText for others
-                        if isCurrentlyPlaying {
-                            HeadlineText(text: song.title)
-                                .lineLimit(1)
-                        } else {
-                            BodyText(text: song.title)
-                                .lineLimit(1)
-                        }
+                        // Use smaller, sleeker fonts matching now playing bar
+                        Text(song.title)
+                            .font(AppFonts.callout)
+                            .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.medium)
+                            .foregroundColor(AppColors.primaryText)
+                            .lineLimit(1)
 
-                        SubheadlineText(text: song.artist)
+                        Text(song.artist)
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.secondaryText)
                             .lineLimit(1)
                         
                     }
