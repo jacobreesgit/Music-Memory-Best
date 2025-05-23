@@ -6,12 +6,33 @@ struct SongDetailView: View {
     @ObservedObject var viewModel: SongDetailViewModel
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var navigationManager: NavigationManager
+    @ObservedObject private var nowPlayingViewModel = NowPlayingViewModel.shared
+    
+    // Check if this song is currently playing
+    private var isCurrentlyPlaying: Bool {
+        nowPlayingViewModel.currentSong?.id == viewModel.song.id
+    }
+    
+    // Check if this song is the current song and actively playing (not paused)
+    private var isActivelyPlaying: Bool {
+        isCurrentlyPlaying && nowPlayingViewModel.isPlaying
+    }
     
     var body: some View {
         ScrollView {
             VStack(spacing: AppSpacing.large) {
-                // Artwork section
-                ArtworkDetailView(artwork: viewModel.artwork)
+                // Artwork section - now clickable to play/pause
+                Button(action: {
+                    AppHaptics.mediumImpact()
+                    playSong(viewModel.song)
+                }) {
+                    ArtworkDetailView(
+                        artwork: viewModel.artwork,
+                        isCurrentlyPlaying: isCurrentlyPlaying,
+                        isActivelyPlaying: isActivelyPlaying
+                    )
+                }
+                .buttonStyle(.plain)
                 
                 // Primary song information
                 VStack(spacing: AppSpacing.small) {
@@ -37,21 +58,7 @@ struct SongDetailView: View {
                     }
                     .padding(.top, AppSpacing.large)
                     
-                    // Play button
-                    Button(action: {
-                        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
-                        let descriptor = MPMediaItemCollection(items: [viewModel.song.mediaItem])
-                        musicPlayer.setQueue(with: descriptor)
-                        musicPlayer.prepareToPlay()
-                        musicPlayer.play()
-                    }) {
-                        HStack {
-                            Image(systemName: "play.fill")
-                            Text("Play")
-                        }
-                    }
-                    .primaryStyle()
-                    .padding(.top, AppSpacing.medium)
+                    // Removed the separate play button - now handled by artwork tap
                 }
                 
                 Divider()
@@ -102,8 +109,6 @@ struct SongDetailView: View {
                             DetailRowView(label: "Release Date", value: viewModel.releaseDate)
                         }
                     }
-                    
-                    // File Information section has been removed as requested
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -120,6 +125,14 @@ struct SongDetailView: View {
                 }
             }
         }
+    }
+    
+    private func playSong(_ song: Song) {
+        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
+        let descriptor = MPMediaItemCollection(items: [song.mediaItem])
+        musicPlayer.setQueue(with: descriptor)
+        musicPlayer.prepareToPlay()
+        musicPlayer.play()
     }
 }
 
@@ -170,27 +183,85 @@ struct DetailRowView: View {
 
 struct ArtworkDetailView: View {
     let artwork: UIImage?
+    let isCurrentlyPlaying: Bool
+    let isActivelyPlaying: Bool
+    @State private var animationOffset: CGFloat = 0
     
     var body: some View {
-        Group {
-            if let artwork = artwork {
-                Image(uiImage: artwork)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .cornerRadius(AppRadius.large)
-                    .appShadow(AppShadow.medium)
-            } else {
-                Image(systemName: "music.note")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .padding(AppSpacing.huge)
-                    .foregroundColor(AppColors.secondaryText)
-                    .background(AppColors.secondaryBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
-                    .appShadow(AppShadow.medium)
+        ZStack {
+            // Base artwork
+            Group {
+                if let artwork = artwork {
+                    Image(uiImage: artwork)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .cornerRadius(AppRadius.large)
+                        .appShadow(AppShadow.medium)
+                } else {
+                    Image(systemName: "music.note")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(AppSpacing.huge)
+                        .foregroundColor(AppColors.secondaryText)
+                        .background(AppColors.secondaryBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
+                        .appShadow(AppShadow.medium)
+                }
+            }
+            .frame(maxWidth: 300, maxHeight: 300)
+            
+            // Overlay for currently playing song
+            if isCurrentlyPlaying {
+                // Semi-transparent overlay
+                RoundedRectangle(cornerRadius: AppRadius.large)
+                    .fill(Color.black.opacity(0.6))
+                    .frame(maxWidth: 300, maxHeight: 300)
+                
+                if isActivelyPlaying {
+                    // Animated equalizer bars for actively playing
+                    HStack(spacing: 4) {
+                        ForEach(0..<4, id: \.self) { index in
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.white)
+                                .frame(width: 6, height: getBarHeight(for: index))
+                                .animation(
+                                    .easeInOut(duration: 0.5 + Double(index) * 0.2)
+                                    .repeatForever(autoreverses: true),
+                                    value: animationOffset
+                                )
+                        }
+                    }
+                } else {
+                    // Static pause icon for paused state
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(Color.white)
+                }
             }
         }
-        .frame(maxWidth: 300, maxHeight: 300)
+        .onAppear {
+            if isActivelyPlaying {
+                startAnimation()
+            }
+        }
+        .onChange(of: isActivelyPlaying) { oldValue, newValue in
+            if newValue {
+                startAnimation()
+            }
+        }
+    }
+    
+    private func startAnimation() {
+        withAnimation {
+            animationOffset = 1.0
+        }
+    }
+    
+    private func getBarHeight(for index: Int) -> CGFloat {
+        let baseHeight: CGFloat = 16
+        let maxHeight: CGFloat = 40
+        let animationFactor = sin(animationOffset * .pi + Double(index) * 0.8)
+        return baseHeight + (maxHeight - baseHeight) * max(0, animationFactor)
     }
 }
 

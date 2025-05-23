@@ -46,7 +46,7 @@ struct NowPlayingBar: View {
                                 .font(AppFonts.callout)
                                 .fontWeight(AppFontWeight.semibold)
                                 .foregroundColor(AppColors.primary)
-                                .frame(width: rank >= 1000 ? 60 : 50, alignment: .center)
+                                .frame(width: rank >= 1000 ? 47 : 37, alignment: .center)
                         }
                         
                         // Song info - Using smaller design system text components for compact space
