@@ -21,6 +21,7 @@ class SongDetailViewModel: ObservableObject {
     @Published var fileSize: String
     
     private let logger: LoggerProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     init(song: Song, logger: LoggerProtocol) {
         self.song = song
@@ -44,6 +45,26 @@ class SongDetailViewModel: ObservableObject {
         
         // Load artwork
         loadArtwork()
+        
+        // Listen for song play completion notifications
+        setupPlayCompletionListener()
+    }
+    
+    private func setupPlayCompletionListener() {
+        NotificationCenter.default.publisher(for: .songPlayCompleted)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let songId = notification.userInfo?[Notification.SongKeys.completedSongId] as? String,
+                      songId == self.song.id else { return }
+                
+                // The play count has been incremented, trigger a refresh
+                self.logger.log("Song play completed for '\(self.song.title)' - refreshing view", level: .info)
+                
+                // Force a view update by reassigning the song
+                self.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
     
     private func extractMetadata() {
