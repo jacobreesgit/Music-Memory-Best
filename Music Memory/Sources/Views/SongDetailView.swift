@@ -267,17 +267,3 @@ struct ArtworkDetailView: View {
         return baseHeight + (maxHeight - baseHeight) * max(0, animationFactor)
     }
 }
-
-// Preview extension
-extension SongDetailView {
-    static func preview() -> some View {
-        let mockSong = PreviewSongFactory.mockSongs.first!
-        let viewModel = SongDetailViewModel.preview(song: mockSong)
-        
-        return NavigationStack {
-            SongDetailView(viewModel: viewModel)
-        }
-        .previewWithContainer(DIContainer.preview())
-        .environmentObject(NavigationManager())
-    }
-}

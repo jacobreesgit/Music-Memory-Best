@@ -42,24 +42,6 @@ class DIContainer: ObservableObject {
         )
     }
     
-    // Factory method for previews
-    static func preview(withMockSongs songs: [Song] = []) -> DIContainer {
-        let logger = Logger()
-        let permissionService = PreviewPermissionService(status: .granted)
-        let musicLibraryService = PreviewMusicLibraryService(mockSongs: songs)
-        let appState = AppState()
-        appState.musicLibraryPermissionStatus = .granted
-        let navigationManager = NavigationManager()
-        
-        return DIContainer(
-            musicLibraryService: musicLibraryService,
-            permissionService: permissionService,
-            logger: logger,
-            appState: appState,
-            navigationManager: navigationManager
-        )
-    }
-    
     // Singleton for backward compatibility
     static let shared: DIContainer = production()
 }

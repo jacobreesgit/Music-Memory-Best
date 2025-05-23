@@ -5,25 +5,14 @@ struct TabBarView: View {
     @EnvironmentObject var container: DIContainer
     @EnvironmentObject var navigationManager: NavigationManager
     @StateObject private var songListViewModel: SongListViewModel
-    @Environment(\.isPreview) private var isPreview
     @State private var selectedTab = 0
     
-    // For preview support
-    var previewMode: Bool
-    
-    init(previewMode: Bool = false, previewSongs: [Song]? = nil) {
-        self.previewMode = previewMode || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-        
-        if let songs = previewSongs, (previewMode || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1") {
-            // Use preview view model with provided songs
-            _songListViewModel = StateObject(wrappedValue: SongListViewModel.preview(withSongs: songs))
-        } else {
-            // Use standard view model with DI container
-            _songListViewModel = StateObject(wrappedValue: SongListViewModel(
-                musicLibraryService: DIContainer.shared.musicLibraryService,
-                logger: DIContainer.shared.logger
-            ))
-        }
+    init() {
+        // Use standard view model with DI container
+        _songListViewModel = StateObject(wrappedValue: SongListViewModel(
+            musicLibraryService: DIContainer.shared.musicLibraryService,
+            logger: DIContainer.shared.logger
+        ))
     }
     
     var body: some View {
@@ -33,27 +22,22 @@ struct TabBarView: View {
                 // Library tab
                 NavigationStack(path: $navigationManager.songListPath) {
                     Group {
-                        // For preview, bypass permission check and show content directly
-                        if previewMode || isPreview {
+                        // Normal flow for real device
+                        switch songListViewModel.permissionStatus {
+                        case .granted:
                             SongListView(viewModel: songListViewModel)
-                        } else {
-                            // Normal flow for real device
-                            switch songListViewModel.permissionStatus {
-                            case .granted:
-                                SongListView(viewModel: songListViewModel)
-                            case .denied:
-                                PermissionDeniedView(
-                                    onRetry: { Task { await songListViewModel.requestPermission() } }
-                                )
-                            case .notRequested, .unknown:
-                                PermissionRequestView(
-                                    onRequest: { Task { await songListViewModel.requestPermission() } }
-                                )
-                            case .requested:
-                                ProgressView("Requesting permission...")
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(AppColors.background)
-                            }
+                        case .denied:
+                            PermissionDeniedView(
+                                onRetry: { Task { await songListViewModel.requestPermission() } }
+                            )
+                        case .notRequested, .unknown:
+                            PermissionRequestView(
+                                onRequest: { Task { await songListViewModel.requestPermission() } }
+                            )
+                        case .requested:
+                            ProgressView("Requesting permission...")
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(AppColors.background)
                         }
                     }
                     .navigationTitle("Library")
@@ -78,7 +62,7 @@ struct TabBarView: View {
                     }
                     .overlay(
                         Group {
-                            if songListViewModel.isLoading && !previewMode && !isPreview {
+                            if songListViewModel.isLoading {
                                 LoadingView()
                             }
                         }
@@ -124,9 +108,7 @@ struct TabBarView: View {
                 )
             }
             .task {
-                if !previewMode && !isPreview {
-                    await songListViewModel.loadSongs()
-                }
+                await songListViewModel.loadSongs()
             }
 
             // Now Playing Bar

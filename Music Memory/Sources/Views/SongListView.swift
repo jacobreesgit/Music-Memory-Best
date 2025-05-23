@@ -82,7 +82,6 @@ struct SongRowView: View {
 struct SongListView: View {
     @ObservedObject var viewModel: SongListViewModel
     @EnvironmentObject var navigationManager: NavigationManager
-    @Environment(\.isPreview) private var isPreview
     
     var body: some View {
         List {
@@ -233,17 +232,5 @@ struct ArtworkView: View {
         let maxHeight: CGFloat = 20
         let animationFactor = sin(animationOffset * .pi + Double(index) * 0.8)
         return baseHeight + (maxHeight - baseHeight) * max(0, animationFactor)
-    }
-}
-
-// Preview extension
-extension SongListView {
-    static func preview() -> some View {
-        let mockSongs = PreviewSongFactory.mockSongs
-        let viewModel = SongListViewModel.preview(withSongs: mockSongs)
-        
-        return SongListView(viewModel: viewModel)
-            .previewWithContainer(DIContainer.preview(withMockSongs: mockSongs))
-            .environmentObject(NavigationManager())
     }
 }
