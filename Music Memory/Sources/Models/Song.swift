@@ -15,12 +15,14 @@ struct Song: Identifiable, Equatable, Hashable {
         self.title = mediaItem.title ?? "Unknown Title"
         self.artist = mediaItem.artist ?? "Unknown Artist"
         self.album = mediaItem.albumTitle ?? "Unknown Album"
-        self.playCount = mediaItem.playCount
+        // Force fresh read of play count
+        self.playCount = mediaItem.value(forProperty: MPMediaItemPropertyPlayCount) as? Int ?? 0
         self.artwork = mediaItem.artwork
         self.mediaItem = mediaItem
     }
     
     static func == (lhs: Song, rhs: Song) -> Bool {
+        // Only compare by ID for equality
         lhs.id == rhs.id
     }
     

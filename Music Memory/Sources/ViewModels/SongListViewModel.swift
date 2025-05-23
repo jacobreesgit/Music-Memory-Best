@@ -36,13 +36,24 @@ class SongListViewModel: ObservableObject {
     }
     
     private func setupNotificationHandlers() {
-        // Listen for requests to update song rank
-        NotificationCenter.default.publisher(for: .requestSongRankUpdate)
+        // Listen for single song refresh requests
+        NotificationCenter.default.publisher(for: .refreshSingleSong)
             .receive(on: RunLoop.main)
             .sink { [weak self] notification in
-                if let currentSong = notification.object as? Song, let songs = self?.songs {
-                    // Post songs list for NowPlayingViewModel to calculate rank
-                    NotificationCenter.default.post(name: .songsListUpdated, object: songs)
+                if let songId = notification.object as? String {
+                    Task {
+                        await self?.refreshSingleSong(withId: songId)
+                    }
+                }
+            }
+            .store(in: &cancellables)
+        
+        // Listen for full library refresh (like from pull-to-refresh)
+        NotificationCenter.default.publisher(for: .mediaLibraryChanged)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                Task {
+                    await self?.refreshAllSongs()
                 }
             }
             .store(in: &cancellables)
@@ -53,26 +64,74 @@ class SongListViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
-        logger.log("Pull to refresh initiated", level: .info)
+        logger.log("Loading songs", level: .info)
         
         do {
             // Check current permission status first
             await updatePermissionStatus(musicLibraryService.checkPermissionStatus())
             
-            // If permission is already granted, invalidate the cache and load songs
+            // If permission is granted, load songs
             if permissionStatus == .granted {
-                await musicLibraryService.invalidateCache()
-                songs = try await musicLibraryService.fetchSongs()
-                logger.log("Pull to refresh completed successfully, fetched \(songs.count) songs", level: .info)
-                
-                // Notify that songs list has been updated
-                NotificationCenter.default.post(name: .songsListUpdated, object: songs)
+                await refreshAllSongs()
             }
-            // Otherwise, just wait for user to tap "Allow Access"
         } catch {
             logger.log("Error loading songs: \(error.localizedDescription)", level: .error)
             handleError(error)
         }
+    }
+    
+    @MainActor
+    func refreshAllSongs() async {
+        logger.log("Refreshing all songs", level: .info)
+        
+        do {
+            // Always invalidate cache first to ensure fresh data
+            await musicLibraryService.invalidateCache()
+            
+            // Fetch fresh songs
+            let freshSongs = try await musicLibraryService.fetchSongs()
+            
+            // Update the songs array on main thread
+            self.songs = freshSongs
+            
+            logger.log("Refreshed all songs successfully, count: \(freshSongs.count)", level: .info)
+            
+            // Post notification that songs have been updated
+            NotificationCenter.default.post(name: .songsListUpdated, object: freshSongs)
+        } catch {
+            logger.log("Error refreshing songs: \(error.localizedDescription)", level: .error)
+            handleError(error)
+        }
+    }
+    
+    @MainActor
+    func refreshSingleSong(withId songId: String) async {
+        logger.log("Refreshing single song with ID: \(songId)", level: .info)
+        
+        // Find the song in our current list
+        guard let currentIndex = songs.firstIndex(where: { $0.id == songId }) else {
+            logger.log("Song not found in current list: \(songId)", level: .warning)
+            return
+        }
+        
+        // Fetch the updated song data
+        guard let updatedSong = await musicLibraryService.refreshSong(withId: songId) else {
+            logger.log("Failed to refresh song: \(songId)", level: .error)
+            return
+        }
+        
+        // Update the song in our list
+        songs[currentIndex] = updatedSong
+        
+        // Re-sort the list if play count changed
+        let oldPlayCount = songs[currentIndex].playCount
+        if updatedSong.playCount != oldPlayCount {
+            logger.log("Play count changed from \(oldPlayCount) to \(updatedSong.playCount), re-sorting", level: .info)
+            songs.sort(by: { $0.playCount > $1.playCount })
+        }
+        
+        // Post notification that songs have been updated
+        NotificationCenter.default.post(name: .songsListUpdated, object: songs)
     }
     
     @MainActor
@@ -88,14 +147,7 @@ class SongListViewModel: ObservableObject {
         
         // If permission was granted, load the songs
         if granted {
-            do {
-                songs = try await musicLibraryService.fetchSongs()
-                
-                // Notify that songs list has been updated
-                NotificationCenter.default.post(name: .songsListUpdated, object: songs)
-            } catch {
-                handleError(error)
-            }
+            await loadSongs()
         }
         
         return granted
@@ -117,6 +169,11 @@ class SongListViewModel: ObservableObject {
             errorSubject.send(AppError.unknown(error))
         }
     }
+}
+
+// MARK: - Notification Names
+extension NSNotification.Name {
+    static let refreshSingleSong = NSNotification.Name("refreshSingleSong")
 }
 
 // MARK: - Preview Factory

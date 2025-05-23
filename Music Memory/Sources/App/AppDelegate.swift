@@ -11,16 +11,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
     
     func applicationWillEnterForeground(_ application: UIApplication) {
-        // Invalidate caches when app comes back to foreground
-        // as media library might have changed
-        if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
-            Task {
-                await musicLibraryService.invalidateCache()
-            }
-        }
+        // When app comes back to foreground, refresh the library
+        logger.log("App will enter foreground - posting media library changed notification", level: .info)
+        NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
         
         // Check permission status when returning to foreground
-        // This handles cases where the user changes permission in Settings
         checkPermissionStatus()
     }
     
@@ -47,8 +42,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Check initial permission status
         checkPermissionStatus()
         
-        // No longer need to call setupNowPlayingObserver() as it's handled
-        // automatically in MusicLibraryService's initialization
+        // Start listening for media library changes
+        MPMediaLibrary.default().beginGeneratingLibraryChangeNotifications()
     }
     
     private func checkPermissionStatus() {
@@ -74,7 +69,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             self?.handleAppError(error)
         }
         
-        // Handle media library notifications
+        // Handle media library changes
         NotificationCenter.default.addObserver(
             forName: .MPMediaLibraryDidChange,
             object: nil,
@@ -94,14 +89,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
     
     private func handleMediaLibraryChange() {
-        logger.log("Media library changed", level: .info)
+        logger.log("Media library changed - posting notification", level: .info)
         
-        // Invalidate caches when media library changes
-        if let musicLibraryService = DIContainer.shared.musicLibraryService as? MusicLibraryService {
-            Task {
-                await musicLibraryService.invalidateCache()
-            }
-        }
+        // Post our custom notification that will trigger a refresh
+        NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
+    }
+    
+    deinit {
+        MPMediaLibrary.default().endGeneratingLibraryChangeNotifications()
     }
 }
 

@@ -21,13 +21,67 @@ class SongDetailViewModel: ObservableObject {
     @Published var fileSize: String
     
     private let logger: LoggerProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     init(song: Song, logger: LoggerProtocol) {
         self.song = song
         self.logger = logger
         
-        // Extract additional metadata from the mediaItem
+        // Extract metadata
+        self.genre = ""
+        self.duration = ""
+        self.releaseDate = ""
+        self.composer = ""
+        self.lastPlayedDate = ""
+        self.skipCount = 0
+        self.rating = 0
+        self.trackNumber = ""
+        self.discNumber = ""
+        self.bpm = 0
+        self.fileSize = ""
+        
+        // Extract all metadata
+        extractMetadata()
+        
+        // Load artwork
+        loadArtwork()
+        
+        // Listen for song list updates to refresh this song's data
+        setupNotificationHandlers()
+    }
+    
+    private func setupNotificationHandlers() {
+        // Listen for song list updates
+        NotificationCenter.default.publisher(for: .songsListUpdated)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let songs = notification.object as? [Song],
+                      let self = self else { return }
+                
+                // Find our song in the updated list
+                if let updatedSong = songs.first(where: { $0.id == self.song.id }) {
+                    self.updateSong(updatedSong)
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func updateSong(_ updatedSong: Song) {
+        logger.log("Updating song details for: \(updatedSong.title)", level: .info)
+        
+        // Update the song
+        self.song = updatedSong
+        
+        // Re-extract metadata with the updated song
+        extractMetadata()
+        
+        // Reload artwork in case it changed
+        loadArtwork()
+    }
+    
+    private func extractMetadata() {
         let mediaItem = song.mediaItem
+        
         self.genre = mediaItem.value(forProperty: MPMediaItemPropertyGenre) as? String ?? "Unknown"
         
         // Format duration from seconds to mm:ss
@@ -64,7 +118,7 @@ class SongDetailViewModel: ObservableObject {
         self.skipCount = mediaItem.value(forProperty: MPMediaItemPropertySkipCount) as? Int ?? 0
         self.rating = mediaItem.value(forProperty: MPMediaItemPropertyRating) as? Int ?? 0
         
-        // Track and disc numbers are often stored as track/totalTracks or disc/totalDiscs
+        // Track and disc numbers
         if let trackNumber = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackNumber) as? Int {
             let totalTracks = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int
             if let total = totalTracks {
@@ -89,7 +143,7 @@ class SongDetailViewModel: ObservableObject {
         
         self.bpm = mediaItem.value(forProperty: MPMediaItemPropertyBeatsPerMinute) as? Int ?? 0
         
-        // Format file size (using a different approach since we don't have direct access to file size)
+        // File size
         if let assetURL = mediaItem.value(forProperty: MPMediaItemPropertyAssetURL) as? URL {
             do {
                 let resources = try assetURL.resourceValues(forKeys: [.fileSizeKey])
@@ -108,8 +162,6 @@ class SongDetailViewModel: ObservableObject {
         } else {
             self.fileSize = "Unknown"
         }
-        
-        loadArtwork()
     }
     
     private func loadArtwork() {
