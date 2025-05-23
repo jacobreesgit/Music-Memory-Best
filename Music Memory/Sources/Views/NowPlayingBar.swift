@@ -68,7 +68,7 @@ struct NowPlayingBar: View {
                                         .font(AppFonts.caption)
                                         .foregroundColor(AppColors.secondaryText)
                                     
-                                    Text("\(currentSong.playCount) plays")
+                                    Text("\(currentSong.displayedPlayCount) plays")
                                         .font(AppFonts.caption)
                                         .foregroundColor(AppColors.secondaryText)
                                         .lineLimit(1)
@@ -207,8 +207,15 @@ class NowPlayingViewModel: ObservableObject {
     // Store the songs list to compute rank
     private var songs: [Song] = []
     
+    // Play completion tracking
+    private var previousSong: Song?
+    private var songStartTime: Date?
+    private var hasTrackedCurrentSong = false
+    private var lastPlaybackPosition: TimeInterval = 0
+    
     private var logger = Logger()
     private var cancellables = Set<AnyCancellable>()
+    private var playbackTimer: Timer?
     
     init() {
         setupObservers()
@@ -217,6 +224,7 @@ class NowPlayingViewModel: ObservableObject {
     
     deinit {
         musicPlayer.endGeneratingPlaybackNotifications()
+        playbackTimer?.invalidate()
     }
     
     func updateSongsList(_ songs: [Song]) {
@@ -251,7 +259,17 @@ class NowPlayingViewModel: ObservableObject {
         NotificationCenter.default.publisher(for: .MPMusicPlayerControllerNowPlayingItemDidChange, object: musicPlayer)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.updateNowPlayingItem()
+                self?.handleNowPlayingItemChange()
+            }
+            .store(in: &cancellables)
+        
+        // Listen for list updates to update rank
+        NotificationCenter.default.publisher(for: .songsListUpdated)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                if let updatedSongs = notification.userInfo?[Notification.SongKeys.updatedSongs] as? [Song] {
+                    self?.updateSongsList(updatedSongs)
+                }
             }
             .store(in: &cancellables)
     }
@@ -262,11 +280,94 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     func updatePlaybackState() {
+        let wasPlaying = isPlaying
         isPlaying = musicPlayer.playbackState == .playing
+        
+        // Start or stop playback position monitoring
+        if isPlaying && !wasPlaying {
+            startPlaybackPositionMonitoring()
+        } else if !isPlaying && wasPlaying {
+            stopPlaybackPositionMonitoring()
+        }
     }
     
     func handlePlaybackStateChange() {
         updatePlaybackState()
+    }
+    
+    private func startPlaybackPositionMonitoring() {
+        stopPlaybackPositionMonitoring() // Ensure no duplicate timers
+        
+        // Monitor playback position every 0.5 seconds
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.checkPlaybackPosition()
+        }
+    }
+    
+    private func stopPlaybackPositionMonitoring() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+    }
+    
+    private func checkPlaybackPosition() {
+        let currentPosition = musicPlayer.currentPlaybackTime
+        
+        // If playback position decreased significantly (more than 2 seconds), it's likely a new song
+        if currentPosition < lastPlaybackPosition - 2.0 {
+            // Position jumped backward - likely a new song started
+            logger.log("Playback position jumped from \(lastPlaybackPosition) to \(currentPosition)", level: .debug)
+        }
+        
+        lastPlaybackPosition = currentPosition
+    }
+    
+    private func handleNowPlayingItemChange() {
+        let previousItem = currentSong
+        let currentItem = musicPlayer.nowPlayingItem
+        
+        // Check if a song actually completed (not just paused or manually changed)
+        if let prevSong = previousItem,
+           prevSong.mediaItem != currentItem,
+           !hasTrackedCurrentSong {
+            
+            // Get the duration of the previous song
+            let duration = prevSong.mediaItem.playbackDuration
+            
+            // Check if we were near the end of the song (within last 5 seconds)
+            let wasNearEnd = lastPlaybackPosition > 0 && lastPlaybackPosition >= duration - 5.0
+            
+            if wasNearEnd || (songStartTime != nil && Date().timeIntervalSince(songStartTime!) >= duration - 5.0) {
+                // Song completed naturally
+                logger.log("Song '\(prevSong.title)' completed naturally", level: .info)
+                
+                // Increment local play count
+                prevSong.incrementLocalPlayCount()
+                
+                // Provide haptic feedback
+                AppHaptics.success()
+                
+                // Post notification for song completion
+                NotificationCenter.default.post(
+                    name: .songPlayCompleted,
+                    object: nil,
+                    userInfo: [Notification.SongKeys.completedSongId: prevSong.id]
+                )
+                
+                hasTrackedCurrentSong = true
+            } else {
+                logger.log("Song '\(prevSong.title)' was skipped at position \(lastPlaybackPosition) of \(duration)", level: .debug)
+            }
+        }
+        
+        // Update to new song
+        updateNowPlayingItem()
+        
+        // Reset tracking for new song
+        if currentItem != nil && currentItem != previousItem?.mediaItem {
+            hasTrackedCurrentSong = false
+            songStartTime = Date()
+            lastPlaybackPosition = 0
+        }
     }
     
     func updateNowPlayingItem() {
@@ -289,6 +390,8 @@ class NowPlayingViewModel: ObservableObject {
             currentSong = nil
             currentArtwork = nil
             currentSongRank = nil
+            songStartTime = nil
+            hasTrackedCurrentSong = false
         }
     }
     
@@ -301,6 +404,11 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     func playSong(_ song: Song, fromQueue songs: [Song]? = nil) {
+        // Reset tracking when manually playing a new song
+        hasTrackedCurrentSong = false
+        songStartTime = Date()
+        lastPlaybackPosition = 0
+        
         if let queueSongs = songs {
             // Playing from a queue (like song list) - set up the entire queue
             logger.log("Playing song '\(song.title)' from queue with \(queueSongs.count) songs", level: .info)
@@ -338,11 +446,15 @@ class NowPlayingViewModel: ObservableObject {
     
     func skipToNext() {
         logger.log("Skipping to next track", level: .info)
+        // Mark current song as tracked to prevent false completion
+        hasTrackedCurrentSong = true
         musicPlayer.skipToNextItem()
     }
     
     func skipToPrevious() {
         logger.log("Skipping to previous track", level: .info)
+        // Mark current song as tracked to prevent false completion
+        hasTrackedCurrentSong = true
         musicPlayer.skipToPreviousItem()
     }
 }

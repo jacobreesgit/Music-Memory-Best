@@ -63,4 +63,14 @@ enum AppError: Error, Identifiable, Equatable {
 
 extension NSNotification.Name {
     static let appErrorOccurred = NSNotification.Name("appErrorOccurred")
+    static let songsListUpdated = NSNotification.Name("songsListUpdated")
+    static let songPlayCompleted = NSNotification.Name("songPlayCompleted")
+}
+
+// Notification info keys
+extension Notification {
+    enum SongKeys {
+        static let updatedSongs = "updatedSongs"
+        static let completedSongId = "completedSongId"
+    }
 }

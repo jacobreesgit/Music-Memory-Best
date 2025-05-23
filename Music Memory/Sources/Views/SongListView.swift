@@ -58,7 +58,8 @@ struct SongRowView: View {
                 
                 Spacer()
                 
-                PlayCountView(count: song.playCount)
+                // Use displayedPlayCount instead of playCount
+                PlayCountView(count: song.displayedPlayCount)
             }
             .contentShape(Rectangle()) // Make the entire area including spacer tappable
             .onTapGesture {

@@ -51,6 +51,7 @@ class SongListViewModel: ObservableObject {
     private let musicLibraryService: MusicLibraryServiceProtocol
     private let logger: LoggerProtocol
     private var cancellables = Set<AnyCancellable>()
+    private var isAppLaunching = true
     let errorSubject = PassthroughSubject<AppError, Never>()
     
     init(
@@ -60,6 +61,7 @@ class SongListViewModel: ObservableObject {
         self.musicLibraryService = musicLibraryService
         self.logger = logger
         setupErrorHandling()
+        setupPlayCompletionListener()
     }
     
     private func setupErrorHandling() {
@@ -72,6 +74,57 @@ class SongListViewModel: ObservableObject {
                 )
             }
             .store(in: &cancellables)
+    }
+    
+    private func setupPlayCompletionListener() {
+        // Listen for song play completion notifications
+        NotificationCenter.default.publisher(for: .songPlayCompleted)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let songId = notification.userInfo?[Notification.SongKeys.completedSongId] as? String else { return }
+                
+                self.handleSongPlayCompleted(songId: songId)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleSongPlayCompleted(songId: String) {
+        logger.log("Handling play completion for song ID: \(songId)", level: .info)
+        
+        // Find the song in our list
+        guard let songIndex = allSongs.firstIndex(where: { $0.id == songId }) else {
+            logger.log("Song with ID \(songId) not found in list", level: .warning)
+            return
+        }
+        
+        let song = allSongs[songIndex]
+        let previousRank = songs.firstIndex(where: { $0.id == songId }).map { $0 + 1 }
+        
+        // Re-sort if we're sorting by play count
+        if sortOption == .playCount {
+            logger.log("Re-sorting list after play count increment for '\(song.title)'", level: .info)
+            
+            // Apply sorting with animation
+            withAnimation(.easeInOut(duration: 0.3)) {
+                applySorting()
+            }
+            
+            // Post notification that songs list was updated
+            NotificationCenter.default.post(
+                name: .songsListUpdated,
+                object: nil,
+                userInfo: [Notification.SongKeys.updatedSongs: songs]
+            )
+            
+            // Log position change if any
+            if let newIndex = songs.firstIndex(where: { $0.id == songId }) {
+                let newRank = newIndex + 1
+                if let oldRank = previousRank, oldRank != newRank {
+                    logger.log("Song '\(song.title)' moved from rank #\(oldRank) to #\(newRank)", level: .info)
+                }
+            }
+        }
     }
     
     @MainActor
@@ -88,9 +141,26 @@ class SongListViewModel: ObservableObject {
             // If permission is granted, load songs
             if permissionStatus == .granted {
                 let fetchedSongs = try await musicLibraryService.fetchSongs()
+                
+                // Sync play counts only on fresh app launch
+                if isAppLaunching {
+                    logger.log("App launching - syncing play counts", level: .info)
+                    for song in fetchedSongs {
+                        song.syncPlayCounts(logger: logger)
+                    }
+                    isAppLaunching = false
+                }
+                
                 self.allSongs = fetchedSongs
                 applySorting()
                 logger.log("Loaded \(fetchedSongs.count) songs successfully", level: .info)
+                
+                // Initial notification to update Now Playing bar rank
+                NotificationCenter.default.post(
+                    name: .songsListUpdated,
+                    object: nil,
+                    userInfo: [Notification.SongKeys.updatedSongs: songs]
+                )
             }
         } catch {
             logger.log("Error loading songs: \(error.localizedDescription)", level: .error)
@@ -148,9 +218,10 @@ class SongListViewModel: ObservableObject {
         switch sortOption {
         case .playCount:
             if sortDirection == .descending {
-                songs = allSongs.sorted { $0.playCount > $1.playCount }
+                // Use displayedPlayCount for sorting
+                songs = allSongs.sorted { $0.displayedPlayCount > $1.displayedPlayCount }
             } else {
-                songs = allSongs.sorted { $0.playCount < $1.playCount }
+                songs = allSongs.sorted { $0.displayedPlayCount < $1.displayedPlayCount }
             }
         case .title:
             if sortDirection == .ascending {

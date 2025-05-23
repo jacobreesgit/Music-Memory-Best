@@ -42,11 +42,11 @@ struct SongDetailView: View {
                     SubheadlineText(text: viewModel.song.artist)
                     SubheadlineText(text: viewModel.song.album)
                     
-                    // Play count highlight
+                    // Play count highlight - using displayedPlayCount
                     HStack {
                         Spacer()
                         VStack {
-                            Text("\(viewModel.song.playCount)")
+                            Text("\(viewModel.song.displayedPlayCount)")
                                 .font(.system(size: AppFontSize.huge, weight: .bold))
                                 .foregroundColor(AppColors.primary)
                             
@@ -68,7 +68,7 @@ struct SongDetailView: View {
                 VStack(alignment: .leading, spacing: AppSpacing.medium) {
                     // Playback Statistics Section
                     DetailSectionView(title: "Playback Statistics") {
-                        DetailRowView(label: "Play Count", value: "\(viewModel.song.playCount)")
+                        DetailRowView(label: "Play Count", value: "\(viewModel.song.displayedPlayCount)")
                         DetailRowView(label: "Skip Count", value: "\(viewModel.skipCount)")
                         if viewModel.lastPlayedDate != "Never" {
                             DetailRowView(label: "Last Played", value: viewModel.lastPlayedDate)
