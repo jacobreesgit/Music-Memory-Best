@@ -15,12 +15,22 @@ struct SongRowView: View {
         nowPlayingViewModel.currentSong?.id == song.id
     }
     
+    // Check if this song is the current song and actively playing (not paused)
+    private var isActivelyPlaying: Bool {
+        isCurrentlyPlaying && nowPlayingViewModel.isPlaying
+    }
+    
     var body: some View {
         HStack(spacing: AppSpacing.small) {
             // Play button area (artwork) - clicking here plays the song
             Button(action: onPlay) {
-                ArtworkView(artwork: song.artwork, size: 50)
-                    .cornerRadius(AppRadius.small)
+                ArtworkView(
+                    artwork: song.artwork,
+                    size: 50,
+                    isCurrentlyPlaying: isCurrentlyPlaying,
+                    isActivelyPlaying: isActivelyPlaying
+                )
+                .cornerRadius(AppRadius.small)
             }
             .buttonStyle(.plain)
             
@@ -121,26 +131,76 @@ struct PlayCountView: View {
 struct ArtworkView: View {
     let artwork: MPMediaItemArtwork?
     let size: CGFloat
+    let isCurrentlyPlaying: Bool
+    let isActivelyPlaying: Bool
     @State private var image: UIImage?
+    @State private var animationOffset: CGFloat = 0
+    
+    init(artwork: MPMediaItemArtwork?, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
+        self.artwork = artwork
+        self.size = size
+        self.isCurrentlyPlaying = isCurrentlyPlaying
+        self.isActivelyPlaying = isActivelyPlaying
+    }
     
     var body: some View {
-        Group {
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Image(systemName: "music.note")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .padding(size / 4)
-                    .foregroundColor(AppColors.secondaryText)
+        ZStack {
+            // Base artwork
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: "music.note")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(size / 4)
+                        .foregroundColor(AppColors.secondaryText)
+                }
+            }
+            .frame(width: size, height: size)
+            .background(AppColors.secondaryBackground)
+            
+            // Overlay for currently selected song
+            if isCurrentlyPlaying {
+                // Semi-transparent overlay
+                Rectangle()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: size, height: size)
+                
+                if isActivelyPlaying {
+                    // Animated equalizer bars for actively playing
+                    HStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { index in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.white)
+                                .frame(width: 3, height: getBarHeight(for: index))
+                                .animation(
+                                    .easeInOut(duration: 0.5 + Double(index) * 0.2)
+                                    .repeatForever(autoreverses: true),
+                                    value: animationOffset
+                                )
+                        }
+                    }
+                } else {
+                    // Static pause icon for paused state
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color.white)
+                }
             }
         }
-        .frame(width: size, height: size)
-        .background(AppColors.secondaryBackground)
         .onAppear {
             loadArtwork()
+            if isActivelyPlaying {
+                startAnimation()
+            }
+        }
+        .onChange(of: isActivelyPlaying) { oldValue, newValue in
+            if newValue {
+                startAnimation()
+            }
         }
     }
     
@@ -148,6 +208,19 @@ struct ArtworkView: View {
         if let artwork = artwork {
             image = artwork.image(at: CGSize(width: size, height: size))
         }
+    }
+    
+    private func startAnimation() {
+        withAnimation {
+            animationOffset = 1.0
+        }
+    }
+    
+    private func getBarHeight(for index: Int) -> CGFloat {
+        let baseHeight: CGFloat = 8
+        let maxHeight: CGFloat = 20
+        let animationFactor = sin(animationOffset * .pi + Double(index) * 0.8)
+        return baseHeight + (maxHeight - baseHeight) * max(0, animationFactor)
     }
 }
 
