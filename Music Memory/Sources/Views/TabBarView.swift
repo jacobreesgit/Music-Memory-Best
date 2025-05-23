@@ -102,6 +102,10 @@ struct TabBarView: View {
                     }
                 }
             }
+            .onChange(of: songListViewModel.songs) { oldValue, newValue in
+                // Update the NowPlayingViewModel with the current songs list whenever it changes
+                NowPlayingViewModel.shared.updateSongsList(newValue)
+            }
             .alert(item: $appState.currentError) { error in
                 Alert(
                     title: Text("Error"),
@@ -125,6 +129,12 @@ struct TabBarView: View {
                         .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.small) // Spacing between tab and now playing bar
                 }
                 .ignoresSafeArea()
+            }
+        }
+        .onAppear {
+            // Ensure the NowPlayingViewModel has the current songs list on appear
+            if !songListViewModel.songs.isEmpty {
+                NowPlayingViewModel.shared.updateSongsList(songListViewModel.songs)
             }
         }
     }

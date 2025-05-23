@@ -20,7 +20,7 @@ struct NowPlayingBar: View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
                 HStack(spacing: AppSpacing.small) {
-                    // Left side: Artwork and song info (with navigation gestures)
+                    // Left side: Artwork, rank, and song info (with navigation gestures)
                     HStack(spacing: AppSpacing.small) {
                         // Custom artwork display logic matched exactly with ArtworkView
                         Group {
@@ -40,13 +40,34 @@ struct NowPlayingBar: View {
                         .background(AppColors.secondaryBackground) // Explicitly add background
                         .cornerRadius(AppRadius.small)
                         
+                        // Rank number - using same styling as song list
+                        if let rank = viewModel.currentSongRank {
+                            Text("\(rank)")
+                                .font(AppFonts.headline)
+                                .foregroundColor(AppColors.primary)
+                                .frame(width: 50, alignment: .center)
+                        }
+                        
                         // Song info - Using design system text components
                         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
                             HeadlineText(text: viewModel.title)
                                 .lineLimit(1)
                             
-                            SubheadlineText(text: viewModel.artist)
-                                .lineLimit(1)
+                            HStack(spacing: AppSpacing.tiny) {
+                                SubheadlineText(text: viewModel.artist)
+                                    .lineLimit(1)
+                                
+                                if let currentSong = viewModel.currentSong {
+                                    Text("•")
+                                        .font(AppFonts.subheadline)
+                                        .foregroundColor(AppColors.secondaryText)
+                                    
+                                    Text("\(currentSong.playCount) plays")
+                                        .font(AppFonts.subheadline)
+                                        .foregroundColor(AppColors.secondaryText)
+                                        .lineLimit(1)
+                                }
+                            }
                         }
                     }
                     // Apply navigation gestures only to the left portion
@@ -94,19 +115,8 @@ struct NowPlayingBar: View {
                     
                     Spacer()
                     
-                    // Right side: Playback control buttons (no navigation gestures)
+                    // Right side: Playback control buttons (no navigation gestures) - removed previous button
                     HStack(spacing: 0) {
-                        // Previous button
-                        Button(action: {
-                            AppHaptics.lightImpact()
-                            viewModel.skipToPrevious()
-                        }) {
-                            Image(systemName: "backward.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(AppColors.primaryText)
-                                .frame(width: 36, height: 36)
-                        }
-                        
                         // Play/Pause button
                         Button(action: {
                             AppHaptics.mediumImpact()
@@ -185,6 +195,10 @@ class NowPlayingViewModel: ObservableObject {
     @Published var artist = ""
     @Published var currentArtwork: MPMediaItemArtwork?
     @Published var currentSong: Song?
+    @Published var currentSongRank: Int?
+    
+    // Store the songs list to compute rank
+    private var songs: [Song] = []
     
     private var logger = Logger()
     private var cancellables = Set<AnyCancellable>()
@@ -196,6 +210,22 @@ class NowPlayingViewModel: ObservableObject {
     
     deinit {
         musicPlayer.endGeneratingPlaybackNotifications()
+    }
+    
+    func updateSongsList(_ songs: [Song]) {
+        self.songs = songs
+        // Recompute rank for current song if there is one
+        if let currentSong = currentSong {
+            updateRankForSong(currentSong)
+        }
+    }
+    
+    private func updateRankForSong(_ song: Song) {
+        if let index = songs.firstIndex(where: { $0.id == song.id }) {
+            currentSongRank = index + 1 // Convert to 1-based ranking
+        } else {
+            currentSongRank = nil
+        }
     }
     
     func setupObservers() {
@@ -240,11 +270,18 @@ class NowPlayingViewModel: ObservableObject {
             artist = mediaItem.artist ?? "Unknown Artist"
             currentArtwork = mediaItem.artwork
             currentSong = Song(from: mediaItem)
+            
+            // Update rank based on current song
+            if let song = currentSong {
+                updateRankForSong(song)
+            }
+            
             isVisible = true
         } else {
             isVisible = false
             currentSong = nil
             currentArtwork = nil
+            currentSongRank = nil
         }
     }
     
