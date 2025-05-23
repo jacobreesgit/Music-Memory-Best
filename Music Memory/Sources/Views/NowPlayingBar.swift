@@ -300,7 +300,35 @@ class NowPlayingViewModel: ObservableObject {
         }
     }
     
-    func playSong(_ song: Song) {
+    func playSong(_ song: Song, fromQueue songs: [Song]? = nil) {
+        if let queueSongs = songs {
+            // Playing from a queue (like song list) - set up the entire queue
+            logger.log("Playing song '\(song.title)' from queue with \(queueSongs.count) songs", level: .info)
+            
+            // Find the index of the selected song in the queue
+            guard let startIndex = queueSongs.firstIndex(where: { $0.id == song.id }) else {
+                logger.log("Song not found in provided queue", level: .error)
+                // Fallback to single song playback
+                playSingleSong(song)
+                return
+            }
+            
+            // Create queue starting from the selected song
+            let queueFromSong = Array(queueSongs[startIndex...])
+            let mediaItems = queueFromSong.map { $0.mediaItem }
+            let descriptor = MPMediaItemCollection(items: mediaItems)
+            
+            musicPlayer.setQueue(with: descriptor)
+            musicPlayer.prepareToPlay()
+            musicPlayer.play()
+        } else {
+            // Playing a single song (like from detail view)
+            playSingleSong(song)
+        }
+    }
+    
+    private func playSingleSong(_ song: Song) {
+        logger.log("Playing single song: '\(song.title)'", level: .info)
         // Set the queue with just this song
         let descriptor = MPMediaItemCollection(items: [song.mediaItem])
         musicPlayer.setQueue(with: descriptor)

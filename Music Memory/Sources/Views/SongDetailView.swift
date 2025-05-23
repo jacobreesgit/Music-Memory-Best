@@ -24,7 +24,7 @@ struct SongDetailView: View {
                 // Artwork section - now clickable to play/pause
                 Button(action: {
                     AppHaptics.mediumImpact()
-                    playSong(viewModel.song)
+                    playSingleSong(viewModel.song)
                 }) {
                     ArtworkDetailView(
                         artwork: viewModel.artwork,
@@ -127,12 +127,9 @@ struct SongDetailView: View {
         }
     }
     
-    private func playSong(_ song: Song) {
-        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
-        let descriptor = MPMediaItemCollection(items: [song.mediaItem])
-        musicPlayer.setQueue(with: descriptor)
-        musicPlayer.prepareToPlay()
-        musicPlayer.play()
+    private func playSingleSong(_ song: Song) {
+        // Play only this single song (no queue) when played from detail view
+        NowPlayingViewModel.shared.playSong(song, fromQueue: nil)
     }
 }
 

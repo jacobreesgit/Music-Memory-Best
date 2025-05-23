@@ -22,7 +22,7 @@ struct SongRowView: View {
     
     var body: some View {
         HStack(spacing: AppSpacing.small) {
-            // Play button area (artwork) - clicking here plays the song
+            // Play button area (artwork only) - clicking here plays the song
             Button(action: onPlay) {
                 ArtworkView(
                     artwork: song.artwork,
@@ -34,36 +34,36 @@ struct SongRowView: View {
             }
             .buttonStyle(.plain)
             
-            // Navigation area (rest of the row) - clicking here goes to detail view
-            Button(action: onNavigate) {
-                HStack(spacing: AppSpacing.small) {
-                    Text("\(index + 1)")
+            // Navigation area (everything else) - clicking anywhere here goes to detail view
+            HStack(spacing: AppSpacing.small) {
+                Text("\(index + 1)")
+                    .font(AppFonts.callout)
+                    .fontWeight(AppFontWeight.semibold)
+                    .foregroundColor(AppColors.primary)
+                    .frame(width: (index + 1) >= 1000 ? 47 : 37, alignment: .center)
+                
+                VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                    // Use smaller, sleeker fonts matching now playing bar
+                    Text(song.title)
                         .font(AppFonts.callout)
-                        .fontWeight(AppFontWeight.semibold)
-                        .foregroundColor(AppColors.primary)
-                        .frame(width: (index + 1) >= 1000 ? 47 : 37, alignment: .center)
-                    
-                    VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                        // Use smaller, sleeker fonts matching now playing bar
-                        Text(song.title)
-                            .font(AppFonts.callout)
-                            .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
-                            .foregroundColor(AppColors.primaryText)
-                            .lineLimit(1)
+                        .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
+                        .foregroundColor(AppColors.primaryText)
+                        .lineLimit(1)
 
-                        Text(song.artist)
-                            .font(AppFonts.caption)
-                            .foregroundColor(AppColors.secondaryText)
-                            .lineLimit(1)
-                        
-                    }
-                    
-                    Spacer()
-                    
-                    PlayCountView(count: song.playCount)
+                    Text(song.artist)
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.secondaryText)
+                        .lineLimit(1)
                 }
+                
+                Spacer()
+                
+                PlayCountView(count: song.playCount)
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle()) // Make the entire area including spacer tappable
+            .onTapGesture {
+                onNavigate()
+            }
         }
         .padding(.vertical, 0) // Removed all vertical padding from the row
     }
@@ -83,7 +83,7 @@ struct SongListView: View {
                     onPlay: {
                         // Provide medium impact haptic feedback for playing song (important action)
                         AppHaptics.mediumImpact()
-                        playSong(song)
+                        playSongFromQueue(song, queue: viewModel.songs)
                     },
                     onNavigate: {
                         // Provide success haptic feedback for successful navigation
@@ -107,12 +107,9 @@ struct SongListView: View {
         )
     }
     
-    private func playSong(_ song: Song) {
-        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
-        let descriptor = MPMediaItemCollection(items: [song.mediaItem])
-        musicPlayer.setQueue(with: descriptor)
-        musicPlayer.prepareToPlay()
-        musicPlayer.play()
+    private func playSongFromQueue(_ song: Song, queue: [Song]) {
+        // Play the selected song with the full queue for continuous playback
+        NowPlayingViewModel.shared.playSong(song, fromQueue: queue)
     }
 }
 
