@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import Combine
 
 protocol MusicLibraryServiceProtocol {
     func requestPermission() async -> Bool
@@ -12,79 +13,134 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
     private let permissionService: PermissionServiceProtocol
     private let logger: LoggerProtocol
     private var cachedSongs: [Song]?
-    private var mediaLibraryQueryTask: Task<Void, Never>?
-    private var playbackObserverTask: Task<Void, Never>?
-    private var nowPlayingObserverTask: Task<Void, Never>?
-    private var lastInvalidationTime: Date = .distantPast
+    private var cancellables = Set<AnyCancellable>()
+    private var lastRefreshTime: Date = .distantPast
+    private var refreshDebounceInterval: TimeInterval = 2.0
+    
+    // Track the current playing item to detect actual changes
+    private var currentPlayingItem: MPMediaItem?
     
     init(permissionService: PermissionServiceProtocol, logger: LoggerProtocol) {
         self.permissionService = permissionService
         self.logger = logger
         
-        // Schedule the setup to run after initialization
-        // This is a special Task that's tied to the actor's lifetime
+        // Setup observers after initialization
         Task {
-            await setupMediaLibraryObserver()
-            await setupPlaybackObservers()
+            await setupObservers()
         }
     }
     
-    private func setupMediaLibraryObserver() async {
-        // Begin listening for media library changes
+    private func setupObservers() async {
+        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
+        
+        // Begin generating notifications
         MPMediaLibrary.default().beginGeneratingLibraryChangeNotifications()
+        musicPlayer.beginGeneratingPlaybackNotifications()
         
-        // Create a task to observe the notifications
-        mediaLibraryQueryTask = Task { [weak self] in
-            guard let self = self else { return }
-            
-            for await _ in NotificationCenter.default.notifications(named: .MPMediaLibraryDidChange) {
-                await self.handleMediaLibraryChange()
-            }
-        }
-    }
-    
-    private func setupPlaybackObservers() async {
-        // Set up playback notifications
-        MPMusicPlayerController.systemMusicPlayer.beginGeneratingPlaybackNotifications()
+        // Create a local cancellables set that we'll manage
+        var localCancellables = Set<AnyCancellable>()
         
-        // Observe playback state changes with debounce protection
-        playbackObserverTask = Task { [weak self] in
-            guard let self = self else { return }
-            
-            for await _ in NotificationCenter.default.notifications(named: .MPMusicPlayerControllerPlaybackStateDidChange) {
-                if await self.shouldProcessStateChange() {
-                    let musicPlayer = MPMusicPlayerController.systemMusicPlayer
-                    if musicPlayer.playbackState == .stopped || musicPlayer.playbackState == .paused {
-                        await self.logger.log("Playback stopped/paused - refreshing media library", level: .info)
-                        await self.invalidateCache()
+        // Use Combine for cleaner observer management
+        await MainActor.run {
+            // Media library changes
+            NotificationCenter.default.publisher(for: .MPMediaLibraryDidChange)
+                .debounce(for: .seconds(1), scheduler: RunLoop.main)
+                .sink { [weak self] _ in
+                    Task {
+                        await self?.handleMediaLibraryChange()
                     }
                 }
-            }
+                .store(in: &localCancellables)
+            
+            // Now playing item changes
+            NotificationCenter.default.publisher(for: .MPMusicPlayerControllerNowPlayingItemDidChange)
+                .sink { [weak self] _ in
+                    Task {
+                        await self?.handleNowPlayingItemChange()
+                    }
+                }
+                .store(in: &localCancellables)
+            
+            // Playback state changes
+            NotificationCenter.default.publisher(for: .MPMusicPlayerControllerPlaybackStateDidChange)
+                .sink { [weak self] _ in
+                    Task {
+                        await self?.handlePlaybackStateChange()
+                    }
+                }
+                .store(in: &localCancellables)
         }
         
-        // Observe now playing item changes
-        nowPlayingObserverTask = Task { [weak self] in
-            guard let self = self else { return }
+        // Now store the cancellables in our actor's property
+        self.cancellables = localCancellables
+    }
+    
+    private func handleMediaLibraryChange() async {
+        logger.log("Media library change detected", level: .info)
+        await refreshIfNeeded()
+    }
+    
+    private func handleNowPlayingItemChange() async {
+        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
+        let newItem = musicPlayer.nowPlayingItem
+        
+        // Check if this is an actual track change
+        if let previousItem = currentPlayingItem,
+           let newItem = newItem,
+           previousItem.persistentID != newItem.persistentID {
             
-            for await _ in NotificationCenter.default.notifications(named: .MPMusicPlayerControllerNowPlayingItemDidChange) {
-                if await self.shouldProcessStateChange() {
-                    // Add a small delay to allow the play count to update
-                    try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 second delay
-                    await self.logger.log("Now playing item changed - refreshing media library", level: .info)
-                    await self.invalidateCache()
-                }
-            }
+            logger.log("Track changed from \(previousItem.title ?? "Unknown") to \(newItem.title ?? "Unknown")", level: .info)
+            
+            // Wait a bit for the system to update play counts
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            
+            logger.log("Refreshing library after track change", level: .info)
+            // Force refresh without debouncing for track changes
+            await forceRefresh()
+        }
+        
+        currentPlayingItem = newItem
+    }
+    
+    private func handlePlaybackStateChange() async {
+        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
+        let state = musicPlayer.playbackState
+        
+        let stateString: String
+        switch state {
+        case .stopped: stateString = "stopped"
+        case .playing: stateString = "playing"
+        case .paused: stateString = "paused"
+        case .interrupted: stateString = "interrupted"
+        case .seekingForward: stateString = "seekingForward"
+        case .seekingBackward: stateString = "seekingBackward"
+        @unknown default: stateString = "unknown"
+        }
+        
+        logger.log("Playback state changed to: \(stateString)", level: .info)
+        
+        // Only refresh on stop/pause if we have a current item (indicates playback was active)
+        if (state == .stopped || state == .paused) && currentPlayingItem != nil {
+            logger.log("Triggering refresh due to playback \(stateString)", level: .info)
+            await refreshIfNeeded()
         }
     }
     
-    // Check if we should process this state change (basic debouncing)
-    private func shouldProcessStateChange() -> Bool {
+    private func refreshIfNeeded() async {
         let now = Date()
-        if now.timeIntervalSince(lastInvalidationTime) < 3.0 {
-            logger.log("Debouncing library refresh", level: .info)
-            return false
+        guard now.timeIntervalSince(lastRefreshTime) >= refreshDebounceInterval else {
+            logger.log("Skipping refresh due to debounce (last refresh was \(String(format: "%.1f", now.timeIntervalSince(lastRefreshTime)))s ago, need \(refreshDebounceInterval)s)", level: .info)
+            return
         }
-        return true
+        
+        logger.log("Proceeding with library refresh", level: .info)
+        await forceRefresh()
+    }
+    
+    private func forceRefresh() async {
+        lastRefreshTime = Date()
+        logger.log("Force refreshing library (bypassing debounce)", level: .info)
+        await invalidateCache()
     }
     
     func requestPermission() async -> Bool {
@@ -100,11 +156,14 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
             throw AppError.permissionDenied
         }
         
+        // Return cached songs if available
+        if let cachedSongs = cachedSongs {
+            logger.log("Returning \(cachedSongs.count) cached songs", level: .debug)
+            return cachedSongs
+        }
+        
+        // Fetch fresh data
         do {
-            if let cachedSongs = cachedSongs {
-                return cachedSongs
-            }
-            
             let songsQuery = MPMediaQuery.songs()
             guard let mediaItems = songsQuery.items else {
                 throw AppError.noMediaItemsFound
@@ -123,30 +182,19 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
     }
     
     func invalidateCache() async {
-        lastInvalidationTime = Date()
         cachedSongs = nil
         logger.log("Music library cache invalidated", level: .info)
         
         // Notify observers that the media library has changed
-        Task { @MainActor in
+        await MainActor.run {
             NotificationCenter.default.post(name: .mediaLibraryChanged, object: nil)
         }
     }
     
-    private func handleMediaLibraryChange() async {
-        if shouldProcessStateChange() {
-            logger.log("Media library change detected", level: .info)
-            await invalidateCache()
-        }
-    }
-    
     deinit {
-        // Cancel all observer tasks when this service is deallocated
-        mediaLibraryQueryTask?.cancel()
-        playbackObserverTask?.cancel()
-        nowPlayingObserverTask?.cancel()
-        
+        // Clean up
         MPMediaLibrary.default().endGeneratingLibraryChangeNotifications()
         MPMusicPlayerController.systemMusicPlayer.endGeneratingPlaybackNotifications()
+        cancellables.removeAll()
     }
 }
