@@ -22,8 +22,17 @@ struct SongRowView: View {
     
     var body: some View {
         HStack(spacing: AppSpacing.small) {
-            // Play button area (artwork only) - clicking here plays the song
-            Button(action: onPlay) {
+            // Play/Pause button area (artwork only) - clicking here plays or pauses the song
+            Button(action: {
+                if isCurrentlyPlaying {
+                    // If this song is currently playing, pause it
+                    AppHaptics.mediumImpact()
+                    NowPlayingViewModel.shared.togglePlayback()
+                } else {
+                    // If this song is not playing, play it
+                    onPlay()
+                }
+            }) {
                 ArtworkView(
                     artwork: song.artwork,
                     size: 45,
@@ -173,14 +182,14 @@ struct ArtworkView: View {
                     .frame(width: size, height: size)
                 
                 if isActivelyPlaying {
-                    // Animated equalizer bars for actively playing
+                    // Animated equalizer bars for actively playing - FASTER ANIMATION
                     HStack(spacing: 2) {
                         ForEach(0..<3, id: \.self) { index in
                             RoundedRectangle(cornerRadius: 1)
                                 .fill(Color.white)
                                 .frame(width: 3, height: getBarHeight(for: index))
                                 .animation(
-                                    .easeInOut(duration: 0.5 + Double(index) * 0.2)
+                                    .easeInOut(duration: 0.25 + Double(index) * 0.1) // Reduced from 0.5 + 0.2 to 0.25 + 0.1
                                     .repeatForever(autoreverses: true),
                                     value: animationOffset
                                 )

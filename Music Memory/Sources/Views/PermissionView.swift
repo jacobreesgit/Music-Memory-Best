@@ -70,19 +70,23 @@ struct PermissionDeniedView: View {
 
 struct LoadingView: View {
     var body: some View {
-        ZStack {
-            AppColors.background
-                .opacity(0.7)
-                .ignoresSafeArea()
+        VStack(spacing: AppSpacing.large) {
+            Spacer()
             
             ProgressView()
                 .scaleEffect(1.5)
-                .standardPadding()
-                .background(
-                    RoundedRectangle(cornerRadius: AppRadius.medium)
-                        .fill(AppColors.background)
-                        .appShadow(AppShadow.small)
-                )
+                .tint(AppColors.primary)
+            
+            VStack(spacing: AppSpacing.small) {
+                HeadlineText(text: "Loading Your Music")
+                
+                SubheadlineText(text: "Analyzing your music library...")
+                    .multilineTextAlignment(.center)
+            }
+            
+            Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColors.background)
     }
 }

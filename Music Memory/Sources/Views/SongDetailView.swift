@@ -24,7 +24,13 @@ struct SongDetailView: View {
                 // Artwork section - now clickable to play/pause
                 Button(action: {
                     AppHaptics.mediumImpact()
-                    playSingleSong(viewModel.song)
+                    if isCurrentlyPlaying {
+                        // If this song is currently playing, pause it
+                        nowPlayingViewModel.togglePlayback()
+                    } else {
+                        // If this song is not playing, play it
+                        playSingleSong(viewModel.song)
+                    }
                 }) {
                     ArtworkDetailView(
                         artwork: viewModel.artwork,
@@ -215,14 +221,14 @@ struct ArtworkDetailView: View {
                     .frame(maxWidth: 300, maxHeight: 300)
                 
                 if isActivelyPlaying {
-                    // Animated equalizer bars for actively playing
+                    // Animated equalizer bars for actively playing - FASTER ANIMATION
                     HStack(spacing: 4) {
                         ForEach(0..<4, id: \.self) { index in
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(Color.white)
                                 .frame(width: 6, height: getBarHeight(for: index))
                                 .animation(
-                                    .easeInOut(duration: 0.5 + Double(index) * 0.2)
+                                    .easeInOut(duration: 0.3 + Double(index) * 0.1) // Reduced from 0.5 + 0.2 to 0.3 + 0.1
                                     .repeatForever(autoreverses: true),
                                     value: animationOffset
                                 )
