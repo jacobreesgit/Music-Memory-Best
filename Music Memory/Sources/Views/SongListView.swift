@@ -5,30 +5,54 @@ import Combine
 struct SongRowView: View {
     let song: Song
     let index: Int
+    let onPlay: () -> Void
+    let onNavigate: () -> Void
     @State private var image: UIImage?
+    @ObservedObject private var nowPlayingViewModel = NowPlayingViewModel.shared
+    
+    // Check if this song is currently playing
+    private var isCurrentlyPlaying: Bool {
+        nowPlayingViewModel.currentSong?.id == song.id
+    }
     
     var body: some View {
         HStack(spacing: AppSpacing.small) {
-            ArtworkView(artwork: song.artwork, size: 50)
-                .cornerRadius(AppRadius.small)
-            
-            Text("\(index + 1)")
-                .font(AppFonts.headline)
-                .foregroundColor(AppColors.primary)
-                .frame(width: 50, alignment: .center)
-            
-            VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                HeadlineText(text: song.title)
-                    .lineLimit(1)
-
-                SubheadlineText(text: song.artist)
-                    .lineLimit(1)
-                
+            // Play button area (artwork) - clicking here plays the song
+            Button(action: onPlay) {
+                ArtworkView(artwork: song.artwork, size: 50)
+                    .cornerRadius(AppRadius.small)
             }
+            .buttonStyle(.plain)
             
-            Spacer()
-            
-            PlayCountView(count: song.playCount)
+            // Navigation area (rest of the row) - clicking here goes to detail view
+            Button(action: onNavigate) {
+                HStack(spacing: AppSpacing.small) {
+                    Text("\(index + 1)")
+                        .font(AppFonts.headline)
+                        .foregroundColor(AppColors.primary)
+                        .frame(width: 50, alignment: .center)
+                    
+                    VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                        // Use HeadlineText for currently playing song, BodyText for others
+                        if isCurrentlyPlaying {
+                            HeadlineText(text: song.title)
+                                .lineLimit(1)
+                        } else {
+                            BodyText(text: song.title)
+                                .lineLimit(1)
+                        }
+
+                        SubheadlineText(text: song.artist)
+                            .lineLimit(1)
+                        
+                    }
+                    
+                    Spacer()
+                    
+                    PlayCountView(count: song.playCount)
+                }
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, AppSpacing.tiny)
     }
@@ -42,14 +66,20 @@ struct SongListView: View {
     var body: some View {
         List {
             ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { index, song in
-                Button {
-                    // Provide success haptic feedback for successful navigation
-                    AppHaptics.success()
-                    navigationManager.navigateToSongDetail(song: song)
-                } label: {
-                    SongRowView(song: song, index: index)
-                }
-                .buttonStyle(.plain)
+                SongRowView(
+                    song: song,
+                    index: index,
+                    onPlay: {
+                        // Provide medium impact haptic feedback for playing song (important action)
+                        AppHaptics.mediumImpact()
+                        playSong(song)
+                    },
+                    onNavigate: {
+                        // Provide success haptic feedback for successful navigation
+                        AppHaptics.success()
+                        navigationManager.navigateToSongDetail(song: song)
+                    }
+                )
             }
         }
         .overlay(
@@ -63,6 +93,14 @@ struct SongListView: View {
                 }
             }
         )
+    }
+    
+    private func playSong(_ song: Song) {
+        let musicPlayer = MPMusicPlayerController.systemMusicPlayer
+        let descriptor = MPMediaItemCollection(items: [song.mediaItem])
+        musicPlayer.setQueue(with: descriptor)
+        musicPlayer.prepareToPlay()
+        musicPlayer.play()
     }
 }
 
