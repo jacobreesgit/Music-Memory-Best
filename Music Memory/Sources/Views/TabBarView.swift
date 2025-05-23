@@ -82,6 +82,13 @@ struct TabBarView: View {
                 .tag(0)
             }
             .accentColor(AppColors.primary)
+            .onAppear {
+                // Set tab bar appearance to use solid colors instead of material
+                let tabBarAppearance = UITabBarAppearance()
+                tabBarAppearance.configureWithDefaultBackground()
+                UITabBar.appearance().standardAppearance = tabBarAppearance
+                UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+            }
             .onChange(of: selectedTab) { oldValue, newValue in
                 // Detect when Library tab (0) is tapped
                 if newValue == 0 && oldValue == 0 {
