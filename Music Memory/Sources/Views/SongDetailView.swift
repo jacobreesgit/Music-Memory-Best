@@ -108,6 +108,7 @@ struct SongDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .standardPadding()
+            .padding(.bottom, 90) // Add bottom padding to account for the Now Playing bar
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
