@@ -68,7 +68,7 @@ struct SongRowView: View {
                 
                 Spacer()
                 
-                HStack(spacing: AppSpacing.tiny) {
+                HStack(spacing: AppSpacing.small) {
                     // Use displayedPlayCount instead of playCount
                     PlayCountView(count: song.displayedPlayCount)
                     
@@ -76,12 +76,14 @@ struct SongRowView: View {
                     if let rankChange = rankChange {
                         HStack(spacing: 1) {
                             Image(systemName: rankChange.icon)
-                                .font(.system(size: 10, weight: .medium))
+                                .font(AppFonts.caption)
+                                .fontWeight(AppFontWeight.medium)
                                 .foregroundColor(rankChange.color)
                             
                             if let magnitude = rankChange.magnitude {
                                 Text("\(magnitude)")
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(AppFonts.caption)
+                                    .fontWeight(AppFontWeight.medium)
                                     .foregroundColor(rankChange.color)
                             }
                         }
@@ -148,8 +150,8 @@ struct PlayCountView: View {
     var body: some View {
         VStack {
             Text("\(count)")
-                .font(AppFonts.callout)
-                .fontWeight(AppFontWeight.medium)
+                .font(AppFonts.caption)
+                .fontWeight(AppFontWeight.semibold)
                 .foregroundColor(count > 0 ? AppColors.primaryText : AppColors.secondaryText)
             
             Text("plays")
