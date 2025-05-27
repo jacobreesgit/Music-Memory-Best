@@ -4,6 +4,7 @@ import MediaPlayer
 class AppDelegate: NSObject, UIApplicationDelegate {
     private let logger = Logger()
     var appState: AppState?
+    private var appLifecycleManager: AppLifecycleManager?
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         setupApp()
@@ -13,10 +14,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private func setupApp() {
         logger.log("Application did finish launching", level: .info)
         
-        // Get reference to AppState
+        // Get references from DI container
         if let appState = DIContainer.shared.appState as? AppState {
             self.appState = appState
         }
+        
+        // Get app lifecycle manager from DI container - it will handle artwork persistence
+        self.appLifecycleManager = DIContainer.shared.appLifecycleManager
         
         // Configure media session
         let audioSession = AVAudioSession.sharedInstance()
@@ -32,6 +36,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Check initial permission status
         checkPermissionStatus()
+        
+        // Cleanup old artwork files
+        DIContainer.shared.artworkPersistenceService.cleanupOldArtwork()
     }
     
     private func checkPermissionStatus() {

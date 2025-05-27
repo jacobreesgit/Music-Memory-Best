@@ -8,6 +8,8 @@ class DIContainer: ObservableObject {
     let appState: any AppStateProtocol
     let navigationManager: NavigationManager
     let rankHistoryService: RankHistoryServiceProtocol
+    let artworkPersistenceService: ArtworkPersistenceServiceProtocol
+    let appLifecycleManager: AppLifecycleManager
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
@@ -15,7 +17,9 @@ class DIContainer: ObservableObject {
         logger: LoggerProtocol,
         appState: any AppStateProtocol,
         navigationManager: NavigationManager,
-        rankHistoryService: RankHistoryServiceProtocol
+        rankHistoryService: RankHistoryServiceProtocol,
+        artworkPersistenceService: ArtworkPersistenceServiceProtocol,
+        appLifecycleManager: AppLifecycleManager
     ) {
         self.musicLibraryService = musicLibraryService
         self.permissionService = permissionService
@@ -23,6 +27,8 @@ class DIContainer: ObservableObject {
         self.appState = appState
         self.navigationManager = navigationManager
         self.rankHistoryService = rankHistoryService
+        self.artworkPersistenceService = artworkPersistenceService
+        self.appLifecycleManager = appLifecycleManager
     }
     
     // Factory method for production
@@ -34,6 +40,11 @@ class DIContainer: ObservableObject {
             logger: logger
         )
         let rankHistoryService = RankHistoryService(logger: logger)
+        let artworkPersistenceService = ArtworkPersistenceService(logger: logger)
+        let appLifecycleManager = AppLifecycleManager(
+            logger: logger,
+            artworkPersistenceService: artworkPersistenceService
+        )
         let appState = AppState()
         let navigationManager = NavigationManager()
         
@@ -43,7 +54,9 @@ class DIContainer: ObservableObject {
             logger: logger,
             appState: appState,
             navigationManager: navigationManager,
-            rankHistoryService: rankHistoryService
+            rankHistoryService: rankHistoryService,
+            artworkPersistenceService: artworkPersistenceService,
+            appLifecycleManager: appLifecycleManager
         )
     }
     

@@ -157,11 +157,11 @@ struct NowPlayingBar: View {
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(), value: viewModel.isVisible)
-            .onChange(of: viewModel.currentArtwork) { oldValue, newValue in
-                updateArtwork(newValue)
+            .onChange(of: viewModel.currentImage) { oldValue, newValue in
+                updateCurrentImage(newValue)
             }
             .onAppear {
-                updateArtwork(viewModel.currentArtwork)
+                updateCurrentImage(viewModel.currentImage)
             }
         }
     }
@@ -179,12 +179,8 @@ struct NowPlayingBar: View {
         navigationManager.navigateToSongDetail(song: currentSong)
     }
     
-    private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
-        if let artwork = artwork {
-            currentImage = artwork.image(at: CGSize(width: 45, height: 45)) // Updated from 50x50 to 45x45
-        } else {
-            currentImage = nil
-        }
+    private func updateCurrentImage(_ image: UIImage?) {
+        currentImage = image
     }
 }
 
@@ -203,6 +199,7 @@ class NowPlayingViewModel: ObservableObject {
     @Published var currentArtwork: MPMediaItemArtwork?
     @Published var currentSong: Song?
     @Published var currentSongRank: Int?
+    @Published var currentImage: UIImage? // Make this published for external observation
     
     // Store the songs list to compute rank
     private var songs: [Song] = []
@@ -216,10 +213,17 @@ class NowPlayingViewModel: ObservableObject {
     private var logger = Logger()
     private var cancellables = Set<AnyCancellable>()
     private var playbackTimer: Timer?
+    private var artworkPersistenceService: ArtworkPersistenceServiceProtocol?
     
     init() {
+        // Get artwork persistence service from DI container
+        artworkPersistenceService = DIContainer.shared.artworkPersistenceService
+        
         setupObservers()
         checkCurrentlyPlaying()
+        
+        // Try to load saved artwork on initialization
+        loadSavedArtworkIfNeeded()
     }
     
     deinit {
@@ -240,6 +244,30 @@ class NowPlayingViewModel: ObservableObject {
             currentSongRank = index + 1 // Convert to 1-based ranking
         } else {
             currentSongRank = nil
+        }
+    }
+    
+    private func loadSavedArtworkIfNeeded() {
+        guard let artworkService = artworkPersistenceService,
+              let currentSong = currentSong else { return }
+        
+        // Only try to load saved artwork if we don't already have artwork loaded
+        if currentImage == nil {
+            if let savedArtwork = artworkService.loadSavedArtwork(for: currentSong.id) {
+                logger.log("Loaded saved artwork for song: '\(currentSong.title)'", level: .info)
+                DispatchQueue.main.async {
+                    self.currentImage = savedArtwork
+                }
+            }
+        }
+    }
+    
+    /// Called by AppLifecycleManager to check if artwork should be restored
+    func checkForArtworkRestoration() {
+        // This method can be called when the app becomes active
+        // to ensure saved artwork is properly restored
+        if let currentSong = currentSong, currentImage == nil {
+            loadSavedArtworkIfNeeded()
         }
     }
     
@@ -384,14 +412,46 @@ class NowPlayingViewModel: ObservableObject {
                 updateRankForSong(song)
             }
             
+            // Try to load saved artwork first, then fall back to system artwork
+            if let song = currentSong {
+                loadSavedArtworkIfNeeded()
+            }
+            
+            // Update artwork - this will either use saved artwork or load from system
+            updateArtwork(currentArtwork)
+            
             isVisible = true
         } else {
             isVisible = false
             currentSong = nil
             currentArtwork = nil
+            currentImage = nil
             currentSongRank = nil
             songStartTime = nil
             hasTrackedCurrentSong = false
+        }
+    }
+    
+    private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
+        // Only update from system artwork if we don't already have saved artwork loaded
+        if currentImage == nil {
+            if let artwork = artwork {
+                currentImage = artwork.image(at: CGSize(width: 45, height: 45))
+            } else {
+                currentImage = nil
+            }
+        } else {
+            // We have saved artwork loaded, but system artwork became available
+            // Update with system artwork and clear saved artwork to prevent future conflicts
+            if let artwork = artwork {
+                let systemImage = artwork.image(at: CGSize(width: 45, height: 45))
+                if systemImage != nil {
+                    currentImage = systemImage
+                    // Clear saved artwork since system artwork is now available
+                    artworkPersistenceService?.clearSavedArtwork()
+                    logger.log("System artwork loaded, cleared saved artwork", level: .debug)
+                }
+            }
         }
     }
     
@@ -408,6 +468,9 @@ class NowPlayingViewModel: ObservableObject {
         hasTrackedCurrentSong = false
         songStartTime = Date()
         lastPlaybackPosition = 0
+        
+        // Clear saved artwork when manually starting a new song
+        artworkPersistenceService?.clearSavedArtwork()
         
         if let queueSongs = songs {
             // Playing from a queue (like song list) - set up the entire queue
@@ -448,6 +511,8 @@ class NowPlayingViewModel: ObservableObject {
         logger.log("Skipping to next track", level: .info)
         // Mark current song as tracked to prevent false completion
         hasTrackedCurrentSong = true
+        // Clear saved artwork when skipping
+        artworkPersistenceService?.clearSavedArtwork()
         musicPlayer.skipToNextItem()
     }
     
@@ -455,6 +520,8 @@ class NowPlayingViewModel: ObservableObject {
         logger.log("Skipping to previous track", level: .info)
         // Mark current song as tracked to prevent false completion
         hasTrackedCurrentSong = true
+        // Clear saved artwork when skipping
+        artworkPersistenceService?.clearSavedArtwork()
         musicPlayer.skipToPreviousItem()
     }
 }

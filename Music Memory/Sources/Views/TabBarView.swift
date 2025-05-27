@@ -4,6 +4,7 @@ struct TabBarView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var container: DIContainer
     @EnvironmentObject var navigationManager: NavigationManager
+    @EnvironmentObject var appLifecycleManager: AppLifecycleManager
     @StateObject private var songListViewModel: SongListViewModel
     @State private var selectedTab = 0
     
