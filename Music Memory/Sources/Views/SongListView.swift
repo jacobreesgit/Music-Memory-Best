@@ -5,6 +5,7 @@ import Combine
 struct SongRowView: View {
     let song: Song
     let index: Int
+    let rankChange: RankChange?
     let onPlay: () -> Void
     let onNavigate: () -> Void
     @State private var image: UIImage?
@@ -67,8 +68,26 @@ struct SongRowView: View {
                 
                 Spacer()
                 
-                // Use displayedPlayCount instead of playCount
-                PlayCountView(count: song.displayedPlayCount)
+                HStack(spacing: AppSpacing.tiny) {
+                    // Use displayedPlayCount instead of playCount
+                    PlayCountView(count: song.displayedPlayCount)
+                    
+                    // Rank change indicator with magnitude - positioned right of plays
+                    if let rankChange = rankChange {
+                        HStack(spacing: 1) {
+                            Image(systemName: rankChange.icon)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(rankChange.color)
+                            
+                            if let magnitude = rankChange.magnitude {
+                                Text("\(magnitude)")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(rankChange.color)
+                            }
+                        }
+                        .frame(width: 20, height: 12)
+                    }
+                }
             }
             .contentShape(Rectangle()) // Make the entire area including spacer tappable
             .onTapGesture {
@@ -89,6 +108,7 @@ struct SongListView: View {
                 SongRowView(
                     song: song,
                     index: index,
+                    rankChange: viewModel.rankChanges[song.id],
                     onPlay: {
                         // Provide medium impact haptic feedback for playing song (important action)
                         AppHaptics.mediumImpact()

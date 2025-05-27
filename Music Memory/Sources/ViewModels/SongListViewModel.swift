@@ -44,24 +44,34 @@ class SongListViewModel: ObservableObject {
     @Published var songs: [Song] = []
     @Published var isLoading: Bool = false
     @Published var permissionStatus: AppPermissionStatus = .unknown
-    @Published var sortOption: SortOption = .playCount
-    @Published var sortDirection: SortDirection = .descending
+    @Published var sortDescriptor = SortDescriptor(option: .playCount, direction: .descending)
+    @Published var rankChanges: [String: RankChange] = [:]
     
     private var allSongs: [Song] = [] // Store original unsorted songs
     private let musicLibraryService: MusicLibraryServiceProtocol
     private let logger: LoggerProtocol
+    private let rankHistoryService: RankHistoryServiceProtocol
     private var cancellables = Set<AnyCancellable>()
     private var isAppLaunching = true
     let errorSubject = PassthroughSubject<AppError, Never>()
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
-        logger: LoggerProtocol
+        logger: LoggerProtocol,
+        rankHistoryService: RankHistoryServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.logger = logger
+        self.rankHistoryService = rankHistoryService
         setupErrorHandling()
         setupPlayCompletionListener()
+        
+        // Cleanup old snapshots on initialization (once per app launch)
+        Task {
+            await MainActor.run {
+                rankHistoryService.cleanupOldSnapshots()
+            }
+        }
     }
     
     private func setupErrorHandling() {
@@ -102,15 +112,21 @@ class SongListViewModel: ObservableObject {
         let previousRank = songs.firstIndex(where: { $0.id == songId }).map { $0 + 1 }
         
         // Re-sort if we're sorting by play count
-        if sortOption == .playCount {
+        if sortDescriptor.option == .playCount {
             logger.log("Re-sorting list after play count increment for '\(song.title)'", level: .info)
             
-            // Apply sorting with animation
+            // 1. Save current state before re-sorting
+            rankHistoryService.saveRankSnapshot(songs: songs, sortDescriptor: sortDescriptor)
+            
+            // 2. Apply sorting with animation
             withAnimation(.easeInOut(duration: 0.3)) {
                 applySorting()
             }
             
-            // Post notification that songs list was updated
+            // 3. Compute rank changes
+            rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
+            
+            // 4. Post notification that songs list was updated
             NotificationCenter.default.post(
                 name: .songsListUpdated,
                 object: nil,
@@ -153,6 +169,12 @@ class SongListViewModel: ObservableObject {
                 
                 self.allSongs = fetchedSongs
                 applySorting()
+                
+                // Compute initial rank changes when loading songs
+                if sortDescriptor.option == .playCount {
+                    rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
+                }
+                
                 logger.log("Loaded \(fetchedSongs.count) songs successfully", level: .info)
                 
                 // Initial notification to update Now Playing bar rank
@@ -196,35 +218,36 @@ class SongListViewModel: ObservableObject {
         }
     }
     
-    func updateSortOption(_ option: SortOption) {
-        if sortOption == option {
-            // Same option selected - toggle direction
-            sortDirection = sortDirection == .descending ? .ascending : .descending
-        } else {
-            // Different option selected - use that option's default direction
-            sortOption = option
-            sortDirection = option.defaultDirection
-        }
+    func updateSortDescriptor(option: SortOption) {
+        let newDirection = (sortDescriptor.option == option)
+            ? (sortDescriptor.direction == .descending ? .ascending : .descending)
+            : option.defaultDirection
         
+        sortDescriptor = SortDescriptor(option: option, direction: newDirection)
         applySorting()
         
-        // Provide haptic feedback for selection change
-        AppHaptics.selectionChanged()
+        // Compute rank changes for the new sort option
+        if sortDescriptor.option == .playCount {
+            rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
+        } else {
+            rankChanges.removeAll() // Clear when not sorting by play count
+        }
         
-        logger.log("Updated sorting to \(sortOption.rawValue) \(sortDirection.rawValue)", level: .info)
+        AppHaptics.selectionChanged()
+        logger.log("Updated sorting to \(sortDescriptor.key)", level: .info)
     }
     
     private func applySorting() {
-        switch sortOption {
+        switch sortDescriptor.option {
         case .playCount:
-            if sortDirection == .descending {
+            if sortDescriptor.direction == .descending {
                 // Use displayedPlayCount for sorting
                 songs = allSongs.sorted { $0.displayedPlayCount > $1.displayedPlayCount }
             } else {
                 songs = allSongs.sorted { $0.displayedPlayCount < $1.displayedPlayCount }
             }
         case .title:
-            if sortDirection == .ascending {
+            if sortDescriptor.direction == .ascending {
                 songs = allSongs.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
             } else {
                 songs = allSongs.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedDescending }

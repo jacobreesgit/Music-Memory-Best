@@ -7,19 +7,22 @@ class DIContainer: ObservableObject {
     let logger: LoggerProtocol
     let appState: any AppStateProtocol
     let navigationManager: NavigationManager
+    let rankHistoryService: RankHistoryServiceProtocol
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
         permissionService: PermissionServiceProtocol,
         logger: LoggerProtocol,
         appState: any AppStateProtocol,
-        navigationManager: NavigationManager
+        navigationManager: NavigationManager,
+        rankHistoryService: RankHistoryServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.permissionService = permissionService
         self.logger = logger
         self.appState = appState
         self.navigationManager = navigationManager
+        self.rankHistoryService = rankHistoryService
     }
     
     // Factory method for production
@@ -30,6 +33,7 @@ class DIContainer: ObservableObject {
             permissionService: permissionService,
             logger: logger
         )
+        let rankHistoryService = RankHistoryService(logger: logger)
         let appState = AppState()
         let navigationManager = NavigationManager()
         
@@ -38,7 +42,8 @@ class DIContainer: ObservableObject {
             permissionService: permissionService,
             logger: logger,
             appState: appState,
-            navigationManager: navigationManager
+            navigationManager: navigationManager,
+            rankHistoryService: rankHistoryService
         )
     }
     

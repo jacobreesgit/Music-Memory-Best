@@ -8,10 +8,11 @@ struct TabBarView: View {
     @State private var selectedTab = 0
     
     init() {
-        // Use standard view model with DI container
+        // Use updated view model with rank history service
         _songListViewModel = StateObject(wrappedValue: SongListViewModel(
             musicLibraryService: DIContainer.shared.musicLibraryService,
-            logger: DIContainer.shared.logger
+            logger: DIContainer.shared.logger,
+            rankHistoryService: DIContainer.shared.rankHistoryService
         ))
     }
     
@@ -138,7 +139,7 @@ struct SortMenuView: View {
             // Sort by options with direction indicators
             ForEach(SortOption.allCases, id: \.self) { option in
                 Button {
-                    viewModel.updateSortOption(option)
+                    viewModel.updateSortDescriptor(option: option)
                 } label: {
                     HStack {
                         Label(option.rawValue, systemImage: option.systemImage)
@@ -146,8 +147,8 @@ struct SortMenuView: View {
                         Spacer()
                         
                         // Show current direction for selected option
-                        if viewModel.sortOption == option {
-                            Image(systemName: viewModel.sortDirection.systemImage)
+                        if viewModel.sortDescriptor.option == option {
+                            Image(systemName: viewModel.sortDescriptor.direction.systemImage)
                         }
                     }
                 }
@@ -155,10 +156,10 @@ struct SortMenuView: View {
         } label: {
             // Show current sort option icon and direction in the toolbar button
             HStack(spacing: AppSpacing.tiny) {
-                Image(systemName: viewModel.sortOption.systemImage)
+                Image(systemName: viewModel.sortDescriptor.option.systemImage)
                     .font(.system(size: 16))
                 
-                Image(systemName: viewModel.sortDirection.systemImage)
+                Image(systemName: viewModel.sortDescriptor.direction.systemImage)
                     .font(.system(size: 14))
             }
             .foregroundColor(AppColors.primary)
