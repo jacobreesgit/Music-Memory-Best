@@ -21,24 +21,12 @@ struct SongDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppSpacing.large) {
-                // Artwork section - now clickable to play/pause
-                Button(action: {
-                    AppHaptics.mediumImpact()
-                    if isCurrentlyPlaying {
-                        // If this song is currently playing, pause it
-                        nowPlayingViewModel.togglePlayback()
-                    } else {
-                        // If this song is not playing, play it
-                        playSingleSong(viewModel.song)
-                    }
-                }) {
-                    ArtworkDetailView(
-                        artwork: viewModel.artwork,
-                        isCurrentlyPlaying: isCurrentlyPlaying,
-                        isActivelyPlaying: isActivelyPlaying
-                    )
-                }
-                .buttonStyle(.plain)
+                // Artwork section - no longer clickable, just displays visual state
+                ArtworkDetailView(
+                    artwork: viewModel.artwork,
+                    isCurrentlyPlaying: isCurrentlyPlaying,
+                    isActivelyPlaying: isActivelyPlaying
+                )
                 
                 // Primary song information
                 VStack(spacing: AppSpacing.small) {
@@ -63,8 +51,6 @@ struct SongDetailView: View {
                         Spacer()
                     }
                     .padding(.top, AppSpacing.large)
-                    
-                    // Removed the separate play button - now handled by artwork tap
                 }
                 
                 Divider()
@@ -131,11 +117,6 @@ struct SongDetailView: View {
                 }
             }
         }
-    }
-    
-    private func playSingleSong(_ song: Song) {
-        // Play only this single song (no queue) when played from detail view
-        NowPlayingViewModel.shared.playSong(song, fromQueue: nil)
     }
 }
 
