@@ -93,12 +93,9 @@ class SongDetailViewModel: ObservableObject {
         
         self.composer = mediaItem.value(forProperty: MPMediaItemPropertyComposer) as? String ?? "Unknown"
         
-        // Format last played date if available
+        // Format last played date with relative time formatting
         if let lastPlayedDate = mediaItem.value(forProperty: MPMediaItemPropertyLastPlayedDate) as? Date {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            self.lastPlayedDate = formatter.string(from: lastPlayedDate)
+            self.lastPlayedDate = formatRelativeTime(from: lastPlayedDate)
         } else {
             self.lastPlayedDate = "Never"
         }
@@ -149,6 +146,111 @@ class SongDetailViewModel: ObservableObject {
             }
         } else {
             self.fileSize = "Unknown"
+        }
+    }
+    
+    /// Formats a date relative to the current time in user-friendly terms
+    private func formatRelativeTime(from date: Date) -> String {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(date)
+        
+        // Handle future dates (shouldn't happen but just in case)
+        guard timeInterval >= 0 else {
+            return "Recently"
+        }
+        
+        let totalSeconds = Int(timeInterval)
+        let totalMinutes = totalSeconds / 60
+        let totalHours = totalMinutes / 60
+        let totalDays = totalHours / 24
+        let totalWeeks = totalDays / 7
+        let totalMonths = totalDays / 30
+        let totalYears = totalDays / 365
+        
+        switch totalSeconds {
+        case 0..<10:
+            return "Just now"
+            
+        case 10..<60: // Less than 1 minute - show seconds
+            return "\(totalSeconds) seconds ago"
+            
+        case 60..<3600: // Less than 1 hour - show minutes and seconds
+            let minutes = totalMinutes
+            let remainingSeconds = totalSeconds % 60
+            
+            if minutes == 1 {
+                if remainingSeconds == 0 {
+                    return "1 minute ago"
+                } else if remainingSeconds == 1 {
+                    return "1 minute 1 second ago"
+                } else {
+                    return "1 minute \(remainingSeconds) seconds ago"
+                }
+            } else {
+                if remainingSeconds == 0 {
+                    return "\(minutes) minutes ago"
+                } else if remainingSeconds == 1 {
+                    return "\(minutes) minutes 1 second ago"
+                } else {
+                    return "\(minutes) minutes \(remainingSeconds) seconds ago"
+                }
+            }
+            
+        case 3600..<86400: // Less than 1 day - show hours and minutes
+            let hours = totalHours
+            let remainingMinutes = (totalMinutes % 60)
+            
+            if hours == 1 {
+                if remainingMinutes == 0 {
+                    return "1 hour ago"
+                } else if remainingMinutes == 1 {
+                    return "1 hour 1 minute ago"
+                } else {
+                    return "1 hour \(remainingMinutes) minutes ago"
+                }
+            } else {
+                if remainingMinutes == 0 {
+                    return "\(hours) hours ago"
+                } else if remainingMinutes == 1 {
+                    return "\(hours) hours 1 minute ago"
+                } else {
+                    return "\(hours) hours \(remainingMinutes) minutes ago"
+                }
+            }
+            
+        case 86400..<172800: // 1-2 days - show days and hours for more recent activity
+            let days = totalDays
+            let remainingHours = (totalHours % 24)
+            
+            if days == 1 {
+                if remainingHours == 0 {
+                    return "1 day ago"
+                } else if remainingHours == 1 {
+                    return "1 day 1 hour ago"
+                } else {
+                    return "1 day \(remainingHours) hours ago"
+                }
+            } else {
+                if remainingHours == 0 {
+                    return "\(days) days ago"
+                } else if remainingHours == 1 {
+                    return "\(days) days 1 hour ago"
+                } else {
+                    return "\(days) days \(remainingHours) hours ago"
+                }
+            }
+            
+        case 172800..<604800: // 2-7 days - just show days
+            return totalDays == 1 ? "1 day ago" : "\(totalDays) days ago"
+            
+        case 604800..<2592000: // Less than 1 month
+            return totalWeeks == 1 ? "1 week ago" : "\(totalWeeks) weeks ago"
+            
+        case 2592000..<31536000: // Less than 1 year
+            return totalMonths == 1 ? "1 month ago" : "\(totalMonths) months ago"
+            
+        default:
+            return totalYears == 1 ? "1 year ago" : "\(totalYears) years ago"
         }
     }
     
