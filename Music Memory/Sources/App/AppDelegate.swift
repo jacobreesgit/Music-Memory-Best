@@ -1,5 +1,6 @@
 import UIKit
 import MediaPlayer
+import AVFoundation
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     private let logger = Logger()
@@ -22,14 +23,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Get app lifecycle manager from DI container - it will handle artwork persistence
         self.appLifecycleManager = DIContainer.shared.appLifecycleManager
         
-        // Configure media session
-        let audioSession = AVAudioSession.sharedInstance()
-        do {
-            try audioSession.setCategory(.playback, mode: .default)
-            try audioSession.setActive(true)
-        } catch {
-            logger.log("Failed to set audio session: \(error.localizedDescription)", level: .error)
-        }
+        // Configure audio session but don't activate it immediately
+        configureAudioSession()
         
         // Register for notifications
         registerForNotifications()
@@ -39,6 +34,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Cleanup old artwork files
         DIContainer.shared.artworkPersistenceService.cleanupOldArtwork()
+    }
+    
+    private func configureAudioSession() {
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            // Set up the audio session category but don't activate it yet
+            try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            logger.log("Audio session configured successfully", level: .info)
+        } catch {
+            logger.log("Failed to set audio session: \(error.localizedDescription)", level: .error)
+        }
     }
     
     private func checkPermissionStatus() {

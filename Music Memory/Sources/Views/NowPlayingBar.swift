@@ -1,6 +1,7 @@
 import SwiftUI
 import MediaPlayer
 import Combine
+import AVFoundation
 
 struct NowPlayingBar: View {
     @ObservedObject private var viewModel = NowPlayingViewModel.shared
@@ -248,13 +249,13 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     private func loadSavedArtworkIfNeeded() {
-        guard let artworkService = artworkPersistenceService,
-              let currentSong = currentSong else { return }
+        guard let artworkService = artworkPersistenceService else { return }
+        guard let song = currentSong else { return }
         
         // Only try to load saved artwork if we don't already have artwork loaded
         if currentImage == nil {
-            if let savedArtwork = artworkService.loadSavedArtwork(for: currentSong.id) {
-                logger.log("Loaded saved artwork for song: '\(currentSong.title)'", level: .info)
+            if let savedArtwork = artworkService.loadSavedArtwork(for: song.id) {
+                logger.log("Loaded saved artwork for song: '\(song.title)'", level: .info)
                 DispatchQueue.main.async {
                     self.currentImage = savedArtwork
                 }
@@ -266,8 +267,19 @@ class NowPlayingViewModel: ObservableObject {
     func checkForArtworkRestoration() {
         // This method can be called when the app becomes active
         // to ensure saved artwork is properly restored
-        if let currentSong = currentSong, currentImage == nil {
+        if let _ = currentSong, currentImage == nil {
             loadSavedArtworkIfNeeded()
+        }
+    }
+    
+    private func activateAudioSessionIfNeeded() {
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            // Only activate when we're about to play music
+            try audioSession.setActive(true)
+            logger.log("Audio session activated for playback", level: .debug)
+        } catch {
+            logger.log("Failed to activate audio session: \(error.localizedDescription)", level: .error)
         }
     }
     
@@ -413,7 +425,7 @@ class NowPlayingViewModel: ObservableObject {
             }
             
             // Try to load saved artwork first, then fall back to system artwork
-            if let song = currentSong {
+            if currentSong != nil {
                 loadSavedArtworkIfNeeded()
             }
             
@@ -459,6 +471,8 @@ class NowPlayingViewModel: ObservableObject {
         if musicPlayer.playbackState == .playing {
             musicPlayer.pause()
         } else {
+            // Activate audio session before resuming playback
+            activateAudioSessionIfNeeded()
             musicPlayer.play()
         }
     }
@@ -471,6 +485,9 @@ class NowPlayingViewModel: ObservableObject {
         
         // Clear saved artwork when manually starting a new song
         artworkPersistenceService?.clearSavedArtwork()
+        
+        // Activate audio session before playing
+        activateAudioSessionIfNeeded()
         
         if let queueSongs = songs {
             // Playing from a queue (like song list) - set up the entire queue

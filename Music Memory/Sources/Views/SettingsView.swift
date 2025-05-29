@@ -6,7 +6,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: AppSpacing.extraLarge) {
+                VStack(spacing: AppSpacing.medium) {
                     // Header Section
                     VStack(spacing: AppSpacing.large) {
                         // App Icon and Title
@@ -63,8 +63,6 @@ struct SettingsView: View {
                                     )
                                 }
                                 
-                                Divider()
-                                
                                 // Clear Data Button
                                 Button(action: {
                                     viewModel.showClearDataConfirmation()
@@ -79,23 +77,15 @@ struct SettingsView: View {
                                         }
                                         
                                         Text(viewModel.isClearing ? "Clearing Data..." : "Clear All Local Data")
-                                            .fontWeight(.semibold)
                                     }
-                                    .foregroundColor(AppColors.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(AppSpacing.medium)
-                                    .background(viewModel.isClearing ? AppColors.inactive : AppColors.destructive)
-                                    .cornerRadius(AppRadius.medium)
-                                    .appShadow(AppShadow.small)
                                 }
+                                .destructiveStyle()
                                 .disabled(viewModel.isClearing)
                                 .opacity(viewModel.isClearing ? 0.7 : 1.0)
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, AppSpacing.extraLarge)
-                    .padding(AppSpacing.medium)
+                    .padding(.horizontal, AppSpacing.medium) // Single horizontal padding
                     .padding(.bottom, AppSpacing.extraLarge)
                 }
             }

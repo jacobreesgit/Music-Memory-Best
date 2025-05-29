@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 
+@MainActor
 class SettingsViewModel: ObservableObject {
     @Published var showingClearDataAlert = false
     @Published var isClearing = false
@@ -18,14 +19,12 @@ class SettingsViewModel: ObservableObject {
     }
     
     func calculateDataSize() {
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self = self else { return }
+        Task {
+            let size = await Task.detached { [settingsService] in
+                return settingsService.getLocalTrackingDataSize()
+            }.value
             
-            let size = self.settingsService.getLocalTrackingDataSize()
-            
-            DispatchQueue.main.async {
-                self.localDataSize = size
-            }
+            self.localDataSize = size
         }
     }
     
@@ -34,7 +33,6 @@ class SettingsViewModel: ObservableObject {
         showingClearDataAlert = true
     }
     
-    @MainActor
     func clearAllLocalData() async {
         isClearing = true
         
@@ -43,16 +41,10 @@ class SettingsViewModel: ObservableObject {
         
         logger.log("User initiated clear all local tracking data", level: .info)
         
-        // Perform the clearing operation on a background queue
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                self?.settingsService.clearAllLocalTrackingData()
-                
-                DispatchQueue.main.async {
-                    continuation.resume()
-                }
-            }
-        }
+        // Perform the clearing operation on a background task
+        await Task.detached { [settingsService] in
+            settingsService.clearAllLocalTrackingData()
+        }.value
         
         // Update data size after clearing
         calculateDataSize()
