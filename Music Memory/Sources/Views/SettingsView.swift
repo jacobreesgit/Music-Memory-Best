@@ -25,7 +25,7 @@ struct SettingsView: View {
                     VStack(spacing: AppSpacing.large) {
                         // Data Management Card
                         AppCard {
-                            VStack(spacing: AppSpacing.medium) {
+                            VStack(spacing: AppSpacing.large) {
                                 // Card Header
                                 HStack {
                                     VStack(alignment: .leading, spacing: AppSpacing.tiny) {
