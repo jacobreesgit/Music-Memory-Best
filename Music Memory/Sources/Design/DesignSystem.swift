@@ -216,7 +216,7 @@ struct AppCard<Content: View>: View {
     var body: some View {
         content
             .padding(AppSpacing.medium)
-            .background(AppColors.white)
+            .background(AppColors.secondaryBackground)
             .cornerRadius(AppRadius.large)
             .appShadow(AppShadow.small)
     }
