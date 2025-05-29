@@ -72,7 +72,7 @@ enum AppSpacing {
     static let large: CGFloat = 24
     static let extraLarge: CGFloat = 32
     static let huge: CGFloat = 48
-    
+        
     enum Horizontal {
         static let tiny = EdgeInsets(top: 0, leading: AppSpacing.tiny, bottom: 0, trailing: AppSpacing.tiny)
         static let small = EdgeInsets(top: 0, leading: AppSpacing.small, bottom: 0, trailing: AppSpacing.small)

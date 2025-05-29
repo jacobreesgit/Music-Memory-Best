@@ -148,7 +148,7 @@ struct NowPlayingBar: View {
                         }
                     }
                 }
-                .padding(.leading, 20) // Specify left padding
+                .padding(.leading, AppSpacing.medium) // Specify left padding
                 .padding(.trailing, 16) // Specify right padding
                 .padding(.vertical, AppSpacing.small)
                 .background(.ultraThinMaterial)

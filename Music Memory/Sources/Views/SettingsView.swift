@@ -85,7 +85,7 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, AppSpacing.medium) // Single horizontal padding
+                    .padding(.horizontal, AppSpacing.medium) 
                     .padding(.bottom, AppSpacing.extraLarge)
                 }
             }
