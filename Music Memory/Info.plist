@@ -21,7 +21,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Music Memory needs access to your music library to show your songs sorted by play count.</string>
+	<string>Music Memory needs access to your music library to show your songs sorted by play count and provide enhanced artwork and metadata.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

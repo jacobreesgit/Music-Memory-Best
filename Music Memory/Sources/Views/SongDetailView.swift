@@ -23,14 +23,25 @@ struct SongDetailView: View {
             VStack(spacing: AppSpacing.large) {
                 ArtworkDetailView(
                     artwork: viewModel.artwork,
+                    enhancedArtwork: viewModel.song.enhancedArtwork,
                     isCurrentlyPlaying: isCurrentlyPlaying,
                     isActivelyPlaying: isActivelyPlaying
                 )
                 
                 // Primary song information
                 VStack(spacing: AppSpacing.small) {
-                    TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
-                        .multilineTextAlignment(.center)
+                    HStack {
+                        TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
+                            .multilineTextAlignment(.center)
+                        
+                        // Show MusicKit enhancement indicator
+                        if viewModel.song.hasEnhancedData {
+                            Image(systemName: "sparkles")
+                                .font(.title3)
+                                .foregroundColor(AppColors.primary)
+                                .help("Enhanced with MusicKit")
+                        }
+                    }
 
                     SubheadlineText(text: viewModel.song.artist)
                     SubheadlineText(text: viewModel.song.album)
@@ -54,6 +65,22 @@ struct SongDetailView: View {
                 
                 Divider()
                     .padding(.top, AppSpacing.small)
+                
+                // Enhanced information notice if MusicKit data is available
+                if viewModel.song.hasEnhancedData {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(AppColors.primary)
+                        
+                        Text("Enhanced with high-quality artwork and metadata")
+                            .font(AppFonts.caption)
+                            .foregroundColor(AppColors.secondaryText)
+                    }
+                    .padding(.horizontal, AppSpacing.medium)
+                    .padding(.vertical, AppSpacing.small)
+                    .background(AppColors.primary.opacity(0.1))
+                    .cornerRadius(AppRadius.small)
+                }
                 
                 // Detailed information sections
                 VStack(alignment: .leading, spacing: AppSpacing.medium) {
@@ -98,6 +125,17 @@ struct SongDetailView: View {
                         DetailRowView(label: "Album", value: viewModel.song.album)
                         if viewModel.releaseDate != "Unknown" {
                             DetailRowView(label: "Release Date", value: viewModel.releaseDate)
+                        }
+                    }
+                    
+                    // Data Source Information Section
+                    DetailSectionView(title: "Data Sources") {
+                        DetailRowView(label: "Primary Data", value: "Apple Music Library")
+                        if viewModel.song.hasEnhancedData {
+                            DetailRowView(label: "Enhanced Data", value: "MusicKit")
+                            DetailRowView(label: "High-Quality Artwork", value: "Available")
+                        } else {
+                            DetailRowView(label: "Enhancement Status", value: "Standard Quality")
                         }
                     }
                 }
@@ -152,86 +190,5 @@ struct DetailRowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, AppSpacing.tiny)
-    }
-}
-
-struct ArtworkDetailView: View {
-    let artwork: UIImage?
-    let isCurrentlyPlaying: Bool
-    let isActivelyPlaying: Bool
-    @State private var animationOffset: CGFloat = 0
-    
-    var body: some View {
-        ZStack {
-            Group {
-                if let artwork = artwork {
-                    Image(uiImage: artwork)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .cornerRadius(AppRadius.large)
-                        .appShadow(AppShadow.medium)
-                } else {
-                    Image(systemName: "music.note")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(AppSpacing.huge)
-                        .foregroundColor(AppColors.secondaryText)
-                        .background(AppColors.secondaryBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
-                        .appShadow(AppShadow.medium)
-                }
-            }
-            .frame(maxWidth: 300, maxHeight: 300)
-            
-            if isCurrentlyPlaying {
-                RoundedRectangle(cornerRadius: AppRadius.large)
-                    .fill(Color.black.opacity(0.6))
-                    .frame(maxWidth: 300, maxHeight: 300)
-                
-                if isActivelyPlaying {
-                    // Animated equalizer bars for actively playing
-                    HStack(spacing: 4) {
-                        ForEach(0..<4, id: \.self) { index in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.white)
-                                .frame(width: 6, height: getBarHeight(for: index))
-                                .animation(
-                                    .easeInOut(duration: 0.3 + Double(index) * 0.1) // Reduced from 0.5 + 0.2 to 0.3 + 0.1
-                                    .repeatForever(autoreverses: true),
-                                    value: animationOffset
-                                )
-                        }
-                    }
-                } else {
-                    // Static pause icon for paused state
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(Color.white)
-                }
-            }
-        }
-        .onAppear {
-            if isActivelyPlaying {
-                startAnimation()
-            }
-        }
-        .onChange(of: isActivelyPlaying) { oldValue, newValue in
-            if newValue {
-                startAnimation()
-            }
-        }
-    }
-    
-    private func startAnimation() {
-        withAnimation {
-            animationOffset = 1.0
-        }
-    }
-    
-    private func getBarHeight(for index: Int) -> CGFloat {
-        let baseHeight: CGFloat = 16
-        let maxHeight: CGFloat = 40
-        let animationFactor = sin(animationOffset * .pi + Double(index) * 0.8)
-        return baseHeight + (maxHeight - baseHeight) * max(0, animationFactor)
     }
 }

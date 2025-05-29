@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import MusicKit
 
 struct Song: Identifiable, Equatable, Hashable {
     let id: String
@@ -9,6 +10,10 @@ struct Song: Identifiable, Equatable, Hashable {
     let playCount: Int
     let artwork: MPMediaItemArtwork?
     let mediaItem: MPMediaItem
+    
+    // MARK: - MusicKit Enhancement Properties
+    let musicKitTrack: Track?
+    let enhancedArtwork: Artwork?
     
     // MARK: - Local Play Count Support
     
@@ -22,7 +27,7 @@ struct Song: Identifiable, Equatable, Hashable {
         UserDefaults.standard.integer(forKey: "localPlayCount_\(id)")
     }
     
-    init(from mediaItem: MPMediaItem) {
+    init(from mediaItem: MPMediaItem, musicKitTrack: Track? = nil) {
         self.id = mediaItem.persistentID.stringValue
         self.title = mediaItem.title ?? "Unknown Title"
         self.artist = mediaItem.artist ?? "Unknown Artist"
@@ -31,6 +36,22 @@ struct Song: Identifiable, Equatable, Hashable {
         self.playCount = mediaItem.value(forProperty: MPMediaItemPropertyPlayCount) as? Int ?? 0
         self.artwork = mediaItem.artwork
         self.mediaItem = mediaItem
+        
+        // MusicKit enhancements
+        self.musicKitTrack = musicKitTrack
+        self.enhancedArtwork = musicKitTrack?.artwork
+    }
+    
+    // MARK: - Enhanced Artwork Access
+    
+    /// Get the best available artwork, preferring MusicKit if available
+    var bestArtwork: Artwork? {
+        return enhancedArtwork
+    }
+    
+    /// Check if enhanced MusicKit data is available
+    var hasEnhancedData: Bool {
+        return musicKitTrack != nil
     }
     
     // MARK: - Local Play Count Methods

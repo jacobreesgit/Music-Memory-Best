@@ -2,6 +2,7 @@ import SwiftUI
 import MediaPlayer
 import Combine
 import AVFoundation
+import MusicKit
 
 struct NowPlayingBar: View {
     @ObservedObject private var viewModel = NowPlayingViewModel.shared
@@ -105,11 +106,20 @@ struct NowPlayingBar: View {
     
     private var songInfoView: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-            Text(viewModel.title)
-                .font(AppFonts.callout)
-                .fontWeight(AppFontWeight.medium)
-                .foregroundColor(AppColors.primaryText)
-                .lineLimit(1)
+            HStack(spacing: AppSpacing.tiny) {
+                Text(viewModel.title)
+                    .font(AppFonts.callout)
+                    .fontWeight(AppFontWeight.medium)
+                    .foregroundColor(AppColors.primaryText)
+                    .lineLimit(1)
+                
+                // Show MusicKit enhancement indicator if available
+                if let currentSong = viewModel.currentSong, currentSong.hasEnhancedData {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 8))
+                        .foregroundColor(AppColors.primary.opacity(0.7))
+                }
+            }
             
             songSubtitleView
         }
@@ -286,7 +296,7 @@ struct NowPlayingBar: View {
     }
 }
 
-// Keep the existing NowPlayingViewModel unchanged
+// Keep the existing NowPlayingViewModel but enhance artwork loading
 class NowPlayingViewModel: ObservableObject {
     // Shared instance for easier access
     static let shared = NowPlayingViewModel()
@@ -519,7 +529,14 @@ class NowPlayingViewModel: ObservableObject {
             title = mediaItem.title ?? "Unknown Title"
             artist = mediaItem.artist ?? "Unknown Artist"
             currentArtwork = mediaItem.artwork
-            currentSong = Song(from: mediaItem)
+            
+            // Find the enhanced Song object from our songs list
+            if let enhancedSong = songs.first(where: { $0.mediaItem.persistentID == mediaItem.persistentID }) {
+                currentSong = enhancedSong
+            } else {
+                // Create a basic Song object if not found in our list
+                currentSong = Song(from: mediaItem)
+            }
             
             // Update rank based on current song
             if let song = currentSong {
@@ -531,7 +548,7 @@ class NowPlayingViewModel: ObservableObject {
                 loadSavedArtworkIfNeeded()
             }
             
-            // Update artwork - this will either use saved artwork or load from system
+            // Update artwork - this will either use saved artwork or load from system/MusicKit
             updateArtwork(currentArtwork)
             
             isVisible = true
@@ -547,6 +564,12 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
+        // Try to use enhanced MusicKit artwork first if available
+        if let song = currentSong, song.hasEnhancedData, let enhancedArtwork = song.enhancedArtwork {
+            loadEnhancedArtwork(enhancedArtwork)
+            return
+        }
+        
         // Only update from system artwork if we don't already have saved artwork loaded
         if currentImage == nil {
             if let artwork = artwork {
@@ -566,6 +589,39 @@ class NowPlayingViewModel: ObservableObject {
                     logger.log("System artwork loaded, cleared saved artwork", level: .debug)
                 }
             }
+        }
+    }
+    
+    private func loadEnhancedArtwork(_ artwork: Artwork) {
+        Task {
+            do {
+                // Request high quality artwork for Now Playing bar
+                let artworkSize = CGSize(width: 90, height: 90) // 2x size for better quality
+                
+                if let artworkImage = try await artwork.image(at: artworkSize) {
+                    await MainActor.run {
+                        self.currentImage = artworkImage
+                        self.logger.log("Loaded enhanced MusicKit artwork", level: .info)
+                    }
+                } else {
+                    // Fallback to MediaPlayer artwork
+                    await MainActor.run {
+                        self.fallbackToMediaPlayerArtwork()
+                    }
+                }
+            } catch {
+                // Fallback to MediaPlayer artwork
+                await MainActor.run {
+                    self.fallbackToMediaPlayerArtwork()
+                    self.logger.log("Failed to load MusicKit artwork, using fallback: \(error.localizedDescription)", level: .debug)
+                }
+            }
+        }
+    }
+    
+    private func fallbackToMediaPlayerArtwork() {
+        if let artwork = currentArtwork {
+            currentImage = artwork.image(at: CGSize(width: 45, height: 45))
         }
     }
     
