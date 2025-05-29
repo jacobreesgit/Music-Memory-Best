@@ -8,149 +8,24 @@ struct NowPlayingBar: View {
     @EnvironmentObject var navigationManager: NavigationManager
     @State private var currentImage: UIImage?
     @State private var isPressed = false
+    @State private var dominantColor: Color = AppColors.primary
     
     // Computed property to determine if we should allow navigation
     private var shouldAllowNavigation: Bool {
         guard let currentSong = viewModel.currentSong else { return false }
-        
-        // Check if we're currently viewing THIS specific song's detail page
         return navigationManager.currentDetailSong?.id != currentSong.id
     }
     
     var body: some View {
         if viewModel.isVisible {
             VStack(spacing: 0) {
-                HStack(spacing: AppSpacing.small) {
-                    // Clickable area: Artwork, rank, song info, and spacer
-                    HStack(spacing: AppSpacing.small) {
-                        Group {
-                            if let image = currentImage {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                Image(systemName: "music.note")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .padding(45 / 4)
-                                    .foregroundColor(AppColors.secondaryText)
-                            }
-                        }
-                        .frame(width: 45, height: 45)
-                        .background(AppColors.secondaryBackground)
-                        .cornerRadius(AppRadius.small)
-                        
-                        // Rank number
-                        if let rank = viewModel.currentSongRank {
-                            Text("\(rank)")
-                                .font(AppFonts.callout)
-                                .fontWeight(AppFontWeight.semibold)
-                                .foregroundColor(AppColors.primary)
-                                .frame(width: rank >= 1000 ? 47 : 37, alignment: .center)
-                        }
-                        
-                        // Song info
-                        VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                            Text(viewModel.title)
-                                .font(AppFonts.callout)
-                                .fontWeight(AppFontWeight.medium)
-                                .foregroundColor(AppColors.primaryText)
-                                .lineLimit(1)
-                            
-                            HStack(spacing: AppSpacing.tiny) {
-                                Text(viewModel.artist)
-                                    .font(AppFonts.caption)
-                                    .foregroundColor(AppColors.secondaryText)
-                                    .lineLimit(1)
-                                
-                                if let currentSong = viewModel.currentSong {
-                                    Text("•")
-                                        .font(AppFonts.caption)
-                                        .foregroundColor(AppColors.secondaryText)
-                                    
-                                    Text("\(currentSong.displayedPlayCount) plays")
-                                        .font(AppFonts.caption)
-                                        .foregroundColor(AppColors.secondaryText)
-                                        .lineLimit(1)
-                                }
-                            }
-                        }
-                        
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .scaleEffect(isPressed ? 0.98 : 1.0) // Visual feedback for press
-                    .animation(.easeInOut(duration: 0.1), value: isPressed)
-                    .onLongPressGesture(
-                        minimumDuration: 0.5,
-                        maximumDistance: 50
-                    ) {
-                        // Long press action - navigate to song detail view only if not already viewing it
-                        if shouldAllowNavigation {
-                            navigateToSongDetail()
-                        } else {
-                            // Provide error feedback that navigation is not available (already on that song's detail)
-                            AppHaptics.error()
-                        }
-                    } onPressingChanged: { pressing in
-                        // Handle press state changes
-                        isPressed = pressing
-                        
-                        if pressing {
-                            if shouldAllowNavigation {
-                                // Provide medium impact feedback when long press begins and navigation is allowed
-                                AppHaptics.mediumImpact()
-                            } else {
-                                // Provide light feedback when navigation is not allowed
-                                AppHaptics.lightImpact()
-                            }
-                        }
-                    }
-                    .simultaneousGesture(
-                        // Add a tap gesture for quick access
-                        TapGesture()
-                            .onEnded { _ in
-                                // Quick tap - navigate only if allowed
-                                if shouldAllowNavigation {
-                                    navigateToSongDetail()
-                                } else {
-                                    // Provide error feedback that navigation is not available (already on that song's detail)
-                                    AppHaptics.error()
-                                }
-                            }
-                    )
-                    
-                    // Right side: Playback control buttons (NOT clickable for navigation)
-                    HStack(spacing: 0) {
-                        // Play/Pause button
-                        Button(action: {
-                            AppHaptics.mediumImpact()
-                            viewModel.togglePlayback()
-                        }) {
-                            Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(AppColors.primaryText)
-                                .frame(width: 44, height: 44)
-                        }
-                        
-                        // Next button
-                        Button(action: {
-                            AppHaptics.lightImpact()
-                            viewModel.skipToNext()
-                        }) {
-                            Image(systemName: "forward.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(AppColors.primaryText)
-                                .frame(width: 36, height: 36)
-                        }
-                    }
-                }
-                .padding(.horizontal, AppSpacing.medium)
-                .padding(.vertical, AppSpacing.small)
-                .background(.ultraThinMaterial)
-                .cornerRadius(AppRadius.medium)
-                .appShadow(AppShadow.medium)
-                .padding(.horizontal, 20) // Now Playing Bar Width
+                nowPlayingContent
+                    .padding(.horizontal, AppSpacing.medium)
+                    .padding(.vertical, AppSpacing.small)
+                    .background(nowPlayingBackground)
+                    .cornerRadius(AppRadius.medium)
+                    .appShadow(AppShadow.medium)
+                    .padding(.horizontal, 8)
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(), value: viewModel.isVisible)
@@ -163,24 +38,255 @@ struct NowPlayingBar: View {
         }
     }
     
-    private func navigateToSongDetail() {
-        // Navigate to song detail view when the now playing bar is interacted with
-        guard let currentSong = viewModel.currentSong else { return }
+    private var nowPlayingContent: some View {
+        HStack(spacing: AppSpacing.small) {
+            clickableArea
+            
+            Spacer()
+            
+            playbackControls
+        }
+    }
+    
+    private var clickableArea: some View {
+        HStack(spacing: AppSpacing.small) {
+            artworkView
+            
+            if let rank = viewModel.currentSongRank {
+                rankText(rank)
+            }
+            
+            songInfoView
+        }
+        .contentShape(Rectangle())
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .onLongPressGesture(
+            minimumDuration: 0.5,
+            maximumDistance: 50
+        ) {
+            handleLongPress()
+        } onPressingChanged: { pressing in
+            handlePressChange(pressing)
+        }
+        .simultaneousGesture(
+            TapGesture().onEnded { _ in
+                handleTap()
+            }
+        )
+    }
+    
+    private var artworkView: some View {
+        Group {
+            if let image = currentImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Image(systemName: "music.note")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding(45 / 4)
+                    .foregroundColor(AppColors.secondaryText)
+            }
+        }
+        .frame(width: 45, height: 45)
+        .background(AppColors.secondaryBackground)
+        .cornerRadius(AppRadius.small)
+    }
+    
+    private func rankText(_ rank: Int) -> some View {
+        Text("\(rank)")
+            .font(AppFonts.callout)
+            .fontWeight(AppFontWeight.semibold)
+            .foregroundColor(AppColors.primary)
+            .frame(width: rank >= 1000 ? 47 : 37, alignment: .center)
+    }
+    
+    private var songInfoView: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+            Text(viewModel.title)
+                .font(AppFonts.callout)
+                .fontWeight(AppFontWeight.medium)
+                .foregroundColor(AppColors.primaryText)
+                .lineLimit(1)
+            
+            songSubtitleView
+        }
+    }
+    
+    private var songSubtitleView: some View {
+        HStack(spacing: AppSpacing.tiny) {
+            Text(viewModel.artist)
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.secondaryText)
+                .lineLimit(1)
+            
+            if let currentSong = viewModel.currentSong {
+                Text("•")
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.secondaryText)
+                
+                Text("\(currentSong.displayedPlayCount) plays")
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+    }
+    
+    private var playbackControls: some View {
+        HStack(spacing: 0) {
+            Button(action: {
+                AppHaptics.mediumImpact()
+                viewModel.togglePlayback()
+            }) {
+                Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(AppColors.primaryText)
+                    .frame(width: 44, height: 44)
+            }
+            
+            Button(action: {
+                AppHaptics.lightImpact()
+                viewModel.skipToNext()
+            }) {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(AppColors.primaryText)
+                    .frame(width: 36, height: 36)
+            }
+        }
+    }
+    
+    private var nowPlayingBackground: some View {
+        ZStack {
+            // Lighter base background to block content behind
+            AppColors.background
+                .opacity(0.675)
+            
+            // More prominent artwork color gradient on top
+            LinearGradient(
+                colors: [
+                    dominantColor.opacity(0.7),
+                    dominantColor.opacity(0.5),
+                    dominantColor.opacity(0.35),
+                    dominantColor.opacity(0.05)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            
+            // Light material for texture without transparency
+            Color.clear
+                .background(.regularMaterial.opacity(0.9))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.medium)
+                .stroke(dominantColor.opacity(0.5), lineWidth: 1.0)
+        )
+        .animation(.easeInOut(duration: 0.6), value: dominantColor)
+    }
+    
+    // MARK: - Actions
+    
+    private func handleLongPress() {
+        if shouldAllowNavigation {
+            navigateToSongDetail()
+        } else {
+            AppHaptics.error()
+        }
+    }
+    
+    private func handleTap() {
+        if shouldAllowNavigation {
+            navigateToSongDetail()
+        } else {
+            AppHaptics.error()
+        }
+    }
+    
+    private func handlePressChange(_ pressing: Bool) {
+        isPressed = pressing
         
-        // Double-check that navigation is allowed (defensive programming)
+        if pressing {
+            if shouldAllowNavigation {
+                AppHaptics.mediumImpact()
+            } else {
+                AppHaptics.lightImpact()
+            }
+        }
+    }
+    
+    private func navigateToSongDetail() {
+        guard let currentSong = viewModel.currentSong else { return }
         guard shouldAllowNavigation else { return }
         
-        // Provide success haptic feedback for successful navigation
         AppHaptics.success()
-        
         navigationManager.navigateToSongDetail(song: currentSong)
     }
     
     private func updateCurrentImage(_ image: UIImage?) {
         currentImage = image
+        
+        if let image = image {
+            dominantColor = extractDominantColor(from: image) ?? AppColors.primary
+        } else {
+            dominantColor = AppColors.primary
+        }
+    }
+    
+    // MARK: - Color Extraction (Simplified)
+    
+    private func extractDominantColor(from image: UIImage) -> Color? {
+        guard let cgImage = image.cgImage else { return nil }
+        
+        // Simple center pixel sampling for performance
+        let width = cgImage.width
+        let height = cgImage.height
+        let centerX = width / 2
+        let centerY = height / 2
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(
+            data: nil,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+        
+        context?.draw(cgImage, in: CGRect(x: -centerX, y: -centerY, width: width, height: height))
+        
+        guard let data = context?.data else { return nil }
+        let pixelData = data.assumingMemoryBound(to: UInt8.self)
+        
+        let red = CGFloat(pixelData[0]) / 255.0
+        let green = CGFloat(pixelData[1]) / 255.0
+        let blue = CGFloat(pixelData[2]) / 255.0
+        
+        // Enhance the color slightly
+        let enhancedColor = UIColor(red: red, green: green, blue: blue, alpha: 1.0)
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        
+        enhancedColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        
+        // Boost saturation and brightness more for better visual impact
+        let boostedSaturation = min(1.0, saturation * 1.8)
+        let adjustedBrightness = brightness < 0.3 ? min(1.0, brightness * 1.8) : max(0.6, brightness)
+        
+        let finalColor = UIColor(hue: hue, saturation: boostedSaturation, brightness: adjustedBrightness, alpha: alpha)
+        
+        return Color(finalColor)
     }
 }
 
+// Keep the existing NowPlayingViewModel unchanged
 class NowPlayingViewModel: ObservableObject {
     // Shared instance for easier access
     static let shared = NowPlayingViewModel()
