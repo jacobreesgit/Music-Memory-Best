@@ -25,7 +25,7 @@ struct SettingsView: View {
                     VStack(spacing: AppSpacing.large) {
                         // Data Management Card
                         AppCard {
-                            VStack(spacing: AppSpacing.large) {
+                            VStack(spacing: AppSpacing.medium) {
                                 // Card Header
                                 HStack {
                                     VStack(alignment: .leading, spacing: AppSpacing.tiny) {
@@ -42,50 +42,52 @@ struct SettingsView: View {
                                 
                                 Divider()
                                 
-                                // Data Description
-                                VStack(alignment: .leading, spacing: AppSpacing.small) {
-                                    InfoRow(
-                                        icon: "shield.checkered",
-                                        title: "Your Music is Safe",
-                                        description: "Only local tracking data is cleared. Your system music library remains untouched."
-                                    )
-                                    
-                                    InfoRow(
-                                        icon: "arrow.clockwise",
-                                        title: "Fresh Start",
-                                        description: "Play count tracking and rank changes will start over from your current system values."
-                                    )
-                                    
-                                    InfoRow(
-                                        icon: "exclamationmark.triangle",
-                                        title: "Cannot be Undone",
-                                        description: "This action permanently removes all local tracking history."
-                                    )
-                                }
-                                
-                                // Clear Data Button
-                                Button(action: {
-                                    viewModel.showClearDataConfirmation()
-                                }) {
-                                    HStack(spacing: AppSpacing.small) {
-                                        if viewModel.isClearing {
-                                            ProgressView()
-                                                .scaleEffect(0.9)
-                                                .tint(AppColors.white)
-                                        } else {
-                                            Image(systemName: "trash")
-                                        }
+                                // Data Description with larger spacing before button
+                                VStack(alignment: .leading, spacing: AppSpacing.large) {
+                                    VStack(alignment: .leading, spacing: AppSpacing.small) {
+                                        InfoRow(
+                                            icon: "shield.checkered",
+                                            title: "Your Music is Safe",
+                                            description: "Only local tracking data is cleared. Your system music library remains untouched."
+                                        )
                                         
-                                        Text(viewModel.isClearing ? "Clearing Data..." : "Clear All Local Data")
+                                        InfoRow(
+                                            icon: "arrow.clockwise",
+                                            title: "Fresh Start",
+                                            description: "Play count tracking and rank changes will start over from your current system values."
+                                        )
+                                        
+                                        InfoRow(
+                                            icon: "exclamationmark.triangle",
+                                            title: "Cannot be Undone",
+                                            description: "This action permanently removes all local tracking history."
+                                        )
                                     }
+                                    
+                                    // Clear Data Button - now with AppSpacing.large separation
+                                    Button(action: {
+                                        viewModel.showClearDataConfirmation()
+                                    }) {
+                                        HStack(spacing: AppSpacing.small) {
+                                            if viewModel.isClearing {
+                                                ProgressView()
+                                                    .scaleEffect(0.9)
+                                                    .tint(AppColors.white)
+                                            } else {
+                                                Image(systemName: "trash")
+                                            }
+                                            
+                                            Text(viewModel.isClearing ? "Clearing Data..." : "Clear All Local Data")
+                                        }
+                                    }
+                                    .destructiveStyle()
+                                    .disabled(viewModel.isClearing)
+                                    .opacity(viewModel.isClearing ? 0.7 : 1.0)
                                 }
-                                .destructiveStyle()
-                                .disabled(viewModel.isClearing)
-                                .opacity(viewModel.isClearing ? 0.7 : 1.0)
                             }
                         }
                     }
-                    .padding(.horizontal, AppSpacing.medium) 
+                    .padding(.horizontal, AppSpacing.medium)
                     .padding(.bottom, AppSpacing.extraLarge)
                 }
             }
@@ -143,9 +145,9 @@ struct InfoRow: View {
     let description: String
     
     var body: some View {
-        HStack(alignment: .top, spacing: AppSpacing.small) {
+        HStack(alignment: .center, spacing: AppSpacing.small) {
             Image(systemName: icon)
-                .font(.subheadline)
+                .font(.system(size: AppFontSize.medium))
                 .foregroundColor(AppColors.primary)
                 .frame(width: 20)
             

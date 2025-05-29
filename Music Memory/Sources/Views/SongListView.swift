@@ -125,7 +125,7 @@ struct SongListView: View {
                 .listRowInsets(EdgeInsets(top: AppSpacing.small, leading: 16, bottom: AppSpacing.small, trailing: 16))
             }
         }
-        .contentMargins(.horizontal, AppSpacing.medium)
+//        .contentMargins(.horizontal, AppSpacing.medium)
         .overlay(
             Group {
                 if viewModel.songs.isEmpty && !viewModel.isLoading {
