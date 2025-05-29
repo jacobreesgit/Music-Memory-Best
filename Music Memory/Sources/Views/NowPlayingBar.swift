@@ -487,7 +487,8 @@ class NowPlayingViewModel: ObservableObject {
                 // Provide haptic feedback
                 AppHaptics.success()
                 
-                // Post notification for song completion
+                // Post notification for song completion - this is the key fix!
+                // Always post the completion regardless of single song or queue
                 NotificationCenter.default.post(
                     name: .songPlayCompleted,
                     object: nil,

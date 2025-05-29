@@ -132,16 +132,14 @@ struct TabBarView: View {
                 }
             }
 
-            // Now Playing Bar - only show on Library tab
-            if selectedTab == 0 {
-                GeometryReader { geometry in
-                    VStack {
-                        Spacer()
-                        NowPlayingBar()
-                            .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.small) // Spacing between tab and now playing bar
-                    }
-                    .ignoresSafeArea()
+            // Now Playing Bar - show on all tabs
+            GeometryReader { geometry in
+                VStack {
+                    Spacer()
+                    NowPlayingBar()
+                        .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.small) // Spacing between tab and now playing bar
                 }
+                .ignoresSafeArea()
             }
         }
         .onAppear {

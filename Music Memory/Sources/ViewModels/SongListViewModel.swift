@@ -139,11 +139,12 @@ class SongListViewModel: ObservableObject {
         let song = allSongs[songIndex]
         let previousRank = songs.firstIndex(where: { $0.id == songId }).map { $0 + 1 }
         
-        // Re-sort if we're sorting by play count
+        // Always handle play count updates and re-sorting, regardless of how the song was played
         if sortDescriptor.option == .playCount {
             logger.log("Re-sorting list after play count increment for '\(song.title)'", level: .info)
             
-            // 1. Save current state before re-sorting
+            // 1. ALWAYS save current state before re-sorting - this is the key fix!
+            // We need to save the snapshot regardless of single song or queue play
             rankHistoryService.saveRankSnapshot(songs: songs, sortDescriptor: sortDescriptor)
             
             // 2. Apply sorting with animation
@@ -151,7 +152,7 @@ class SongListViewModel: ObservableObject {
                 applySorting()
             }
             
-            // 3. Compute rank changes
+            // 3. ALWAYS compute rank changes - this ensures indicators show up
             rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
             
             // 4. Post notification that songs list was updated
@@ -161,13 +162,29 @@ class SongListViewModel: ObservableObject {
                 userInfo: [Notification.SongKeys.updatedSongs: songs]
             )
             
+            // 5. Ensure NowPlayingViewModel has the updated list
+            NowPlayingViewModel.shared.updateSongsList(songs)
+            
             // Log position change if any
             if let newIndex = songs.firstIndex(where: { $0.id == songId }) {
                 let newRank = newIndex + 1
                 if let oldRank = previousRank, oldRank != newRank {
                     logger.log("Song '\(song.title)' moved from rank #\(oldRank) to #\(newRank)", level: .info)
+                } else if previousRank == nil {
+                    logger.log("Song '\(song.title)' now at rank #\(newRank) (was not in previous ranking)", level: .info)
                 }
             }
+        } else {
+            // Even if not sorting by play count, still notify that the song list was updated
+            // so that play count displays are refreshed
+            NotificationCenter.default.post(
+                name: .songsListUpdated,
+                object: nil,
+                userInfo: [Notification.SongKeys.updatedSongs: songs]
+            )
+            
+            // Ensure NowPlayingViewModel has the updated list
+            NowPlayingViewModel.shared.updateSongsList(songs)
         }
     }
     
@@ -211,6 +228,9 @@ class SongListViewModel: ObservableObject {
                     object: nil,
                     userInfo: [Notification.SongKeys.updatedSongs: songs]
                 )
+                
+                // Ensure NowPlayingViewModel has the current songs list
+                NowPlayingViewModel.shared.updateSongsList(songs)
             }
         } catch {
             logger.log("Error loading songs: \(error.localizedDescription)", level: .error)
@@ -260,6 +280,9 @@ class SongListViewModel: ObservableObject {
         } else {
             rankChanges.removeAll() // Clear when not sorting by play count
         }
+        
+        // Update NowPlayingViewModel with the new sorted list
+        NowPlayingViewModel.shared.updateSongsList(songs)
         
         AppHaptics.selectionChanged()
         logger.log("Updated sorting to \(sortDescriptor.key)", level: .info)
