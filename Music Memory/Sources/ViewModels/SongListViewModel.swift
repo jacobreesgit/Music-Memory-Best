@@ -65,6 +65,7 @@ class SongListViewModel: ObservableObject {
         self.rankHistoryService = rankHistoryService
         setupErrorHandling()
         setupPlayCompletionListener()
+        setupLocalDataClearedListener()
         
         // Cleanup old snapshots on initialization (once per app launch)
         Task {
@@ -97,6 +98,33 @@ class SongListViewModel: ObservableObject {
                 self.handleSongPlayCompleted(songId: songId)
             }
             .store(in: &cancellables)
+    }
+    
+    private func setupLocalDataClearedListener() {
+        // Listen for local data cleared notifications
+        NotificationCenter.default.publisher(for: .localDataCleared)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.handleLocalDataCleared()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleLocalDataCleared() {
+        logger.log("Local data cleared - refreshing song list", level: .info)
+        
+        // Clear rank changes since rank history was cleared
+        rankChanges.removeAll()
+        
+        // Refresh the song list to reflect cleared local play counts
+        applySorting()
+        
+        // Post notification to update Now Playing bar
+        NotificationCenter.default.post(
+            name: .songsListUpdated,
+            object: nil,
+            userInfo: [Notification.SongKeys.updatedSongs: songs]
+        )
     }
     
     private func handleSongPlayCompleted(songId: String) {

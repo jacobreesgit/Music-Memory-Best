@@ -6,6 +6,7 @@ struct TabBarView: View {
     @EnvironmentObject var navigationManager: NavigationManager
     @EnvironmentObject var appLifecycleManager: AppLifecycleManager
     @StateObject private var songListViewModel: SongListViewModel
+    @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selectedTab = 0
     
     init() {
@@ -14,6 +15,12 @@ struct TabBarView: View {
             musicLibraryService: DIContainer.shared.musicLibraryService,
             logger: DIContainer.shared.logger,
             rankHistoryService: DIContainer.shared.rankHistoryService
+        ))
+        
+        // Initialize settings view model
+        _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(
+            settingsService: DIContainer.shared.settingsService,
+            logger: DIContainer.shared.logger
         ))
     }
     
@@ -74,6 +81,13 @@ struct TabBarView: View {
                     Label("Library", systemImage: "music.note.list")
                 }
                 .tag(0)
+                
+                // Settings tab
+                SettingsView(viewModel: settingsViewModel)
+                    .tabItem {
+                        Label("Settings", systemImage: "gear")
+                    }
+                    .tag(1)
             }
             .accentColor(AppColors.primary)
             .onAppear {
@@ -112,15 +126,23 @@ struct TabBarView: View {
             .task {
                 await songListViewModel.loadSongs()
             }
-
-            // Now Playing Bar
-            GeometryReader { geometry in
-                VStack {
-                    Spacer()
-                    NowPlayingBar()
-                        .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.small) // Spacing between tab and now playing bar
+            .onReceive(NotificationCenter.default.publisher(for: .localDataCleared)) { _ in
+                // Refresh the song list when local data is cleared
+                Task {
+                    await songListViewModel.loadSongs()
                 }
-                .ignoresSafeArea()
+            }
+
+            // Now Playing Bar - only show on Library tab
+            if selectedTab == 0 {
+                GeometryReader { geometry in
+                    VStack {
+                        Spacer()
+                        NowPlayingBar()
+                            .offset(y: -geometry.safeAreaInsets.bottom - 49 - AppSpacing.small) // Spacing between tab and now playing bar
+                    }
+                    .ignoresSafeArea()
+                }
             }
         }
         .onAppear {

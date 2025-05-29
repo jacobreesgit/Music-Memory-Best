@@ -203,6 +203,23 @@ extension View {
     }
 }
 
+// MARK: - Card Component
+struct AppCard<Content: View>: View {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    var body: some View {
+        content
+            .padding(AppSpacing.medium)
+            .background(AppColors.white)
+            .cornerRadius(AppRadius.large)
+            .appShadow(AppShadow.small)
+    }
+}
+
 // MARK: - Button Styles
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

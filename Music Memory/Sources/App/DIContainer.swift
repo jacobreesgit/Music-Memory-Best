@@ -10,6 +10,7 @@ class DIContainer: ObservableObject {
     let rankHistoryService: RankHistoryServiceProtocol
     let artworkPersistenceService: ArtworkPersistenceServiceProtocol
     let appLifecycleManager: AppLifecycleManager
+    let settingsService: SettingsServiceProtocol
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
@@ -19,7 +20,8 @@ class DIContainer: ObservableObject {
         navigationManager: NavigationManager,
         rankHistoryService: RankHistoryServiceProtocol,
         artworkPersistenceService: ArtworkPersistenceServiceProtocol,
-        appLifecycleManager: AppLifecycleManager
+        appLifecycleManager: AppLifecycleManager,
+        settingsService: SettingsServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.permissionService = permissionService
@@ -29,6 +31,7 @@ class DIContainer: ObservableObject {
         self.rankHistoryService = rankHistoryService
         self.artworkPersistenceService = artworkPersistenceService
         self.appLifecycleManager = appLifecycleManager
+        self.settingsService = settingsService
     }
     
     // Factory method for production
@@ -41,6 +44,11 @@ class DIContainer: ObservableObject {
         )
         let rankHistoryService = RankHistoryService(logger: logger)
         let artworkPersistenceService = ArtworkPersistenceService(logger: logger)
+        let settingsService = SettingsService(
+            logger: logger,
+            artworkPersistenceService: artworkPersistenceService,
+            rankHistoryService: rankHistoryService
+        )
         let appLifecycleManager = AppLifecycleManager(
             logger: logger,
             artworkPersistenceService: artworkPersistenceService
@@ -56,7 +64,8 @@ class DIContainer: ObservableObject {
             navigationManager: navigationManager,
             rankHistoryService: rankHistoryService,
             artworkPersistenceService: artworkPersistenceService,
-            appLifecycleManager: appLifecycleManager
+            appLifecycleManager: appLifecycleManager,
+            settingsService: settingsService
         )
     }
     

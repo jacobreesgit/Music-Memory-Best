@@ -4,6 +4,7 @@ protocol RankHistoryServiceProtocol {
     func saveRankSnapshot(songs: [Song], sortDescriptor: SortDescriptor)
     func getRankChanges(for songs: [Song], sortDescriptor: SortDescriptor) -> [String: RankChange]
     func cleanupOldSnapshots()
+    func clearAllRankHistory()
 }
 
 class RankHistoryService: RankHistoryServiceProtocol {
@@ -120,6 +121,20 @@ class RankHistoryService: RankHistoryServiceProtocol {
                 #endif
             }
         }
+    }
+    
+    func clearAllRankHistory() {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        
+        // Remove all rank history keys
+        let rankHistoryKeys = allKeys.filter { $0.hasPrefix("rankSnapshots_") }
+        
+        for key in rankHistoryKeys {
+            userDefaults.removeObject(forKey: key)
+        }
+        
+        logger.log("Cleared all rank history data: \(rankHistoryKeys.count) entries removed", level: .info)
     }
     
     private func getStoredSnapshots(for sortDescriptor: SortDescriptor) -> [RankSnapshot] {
