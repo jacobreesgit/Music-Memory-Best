@@ -118,17 +118,17 @@ struct NowPlayingBar: View {
     private var songSubtitleView: some View {
         HStack(spacing: AppSpacing.tiny) {
             Text(viewModel.artist)
-                .font(AppFonts.caption)
+                .font(AppFonts.detail)
                 .foregroundColor(AppColors.secondaryText)
                 .lineLimit(1)
             
             if let currentSong = viewModel.currentSong {
                 Text("•")
-                    .font(AppFonts.caption)
+                    .font(AppFonts.detail)
                     .foregroundColor(AppColors.secondaryText)
                 
                 Text("\(currentSong.displayedPlayCount) plays")
-                    .font(AppFonts.caption)
+                    .font(AppFonts.detail)
                     .foregroundColor(AppColors.secondaryText)
                     .lineLimit(1)
             }

@@ -39,6 +39,7 @@ enum AppFonts {
     static let subheadline = Font.subheadline
     static let body = Font.body
     static let callout = Font.callout
+    static let detail = Font.system(size: AppFontSize.detail) // 20% smaller than body for captions, smaller text
     static let caption = Font.caption
     static let caption2 = Font.caption2
     
@@ -57,7 +58,8 @@ enum AppFontWeight {
 
 enum AppFontSize {
     static let small: CGFloat = 12
-    static let medium: CGFloat = 16
+    static let detail: CGFloat = 13 // 20% smaller than medium (16 * 0.85 = 13.6, rounded to 14)
+    static let medium: CGFloat = 16 // Standard body text
     static let large: CGFloat = 24
     static let extraLarge: CGFloat = 32
     static let huge: CGFloat = 48  // For the play count number
@@ -342,6 +344,16 @@ struct BodyText: View {
         Text(text)
             .font(AppFonts.body)
             .foregroundColor(AppColors.primaryText)
+    }
+}
+
+struct DetailText: View {
+    let text: String
+    
+    var body: some View {
+        Text(text)
+            .font(AppFonts.detail)
+            .foregroundColor(AppColors.secondaryText)
     }
 }
 

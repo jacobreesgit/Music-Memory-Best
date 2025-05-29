@@ -71,6 +71,7 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 | `subheadline` | `Font.subheadline` | ~15% smaller than body | Section headers |
 | `body` | `Font.body` | Base text size | Main text content |
 | `callout` | `Font.callout` | Similar to body with different weight | Callout text, emphasized points |
+| `detail` | `Font.system(size: 14)` | 20% smaller than body | Captions, smaller text, secondary info |
 | `caption` | `Font.caption` | ~30% smaller than body | Captions, smaller text |
 | `caption2` | `Font.caption2` | Smallest text scale | Footnotes, fine print |
 
@@ -90,6 +91,7 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 | Name | Value | Usage |
 |------|-------|-------|
 | `small` | `12` | Small text, captions |
+| `detail` | `14` | Detail text, 20% smaller than body |
 | `medium` | `16` | Standard text, body |
 | `large` | `24` | Headings, important text |
 | `extraLarge` | `32` | Major headings |
@@ -102,6 +104,7 @@ SwiftUI provides a built-in font size system with scales that adapt to the user'
 - Respect the system's dynamic type settings
 - Maintain proper hierarchy with font sizes and weights
 - Use appropriate text styles for different content types
+- Use `detail` font for secondary information like artist names, play counts, and status indicators
 
 ## Spacing & Layout
 
@@ -291,6 +294,11 @@ HeadlineText(text: "Your Headline")
 BodyText(text: "Your paragraph text goes here.")
 ```
 
+#### Detail Text
+```swift
+DetailText(text: "Secondary information text")
+```
+
 #### Caption Text
 ```swift
 CaptionText(text: "Small caption text")
@@ -330,6 +338,7 @@ PlayCountView(count: song.playCount)
    - Maintain a clear hierarchy with font sizes and weights
    - Use appropriate text styles for different content types
    - Respect system font settings
+   - Use `detail` font for secondary information and smaller text
 
 3. **Layout**:
    - Use consistent spacing throughout the application
@@ -402,6 +411,8 @@ VStack(alignment: .leading, spacing: AppSpacing.small) {
     TitleText(text: "Song Title", weight: .bold)
     
     SubheadlineText(text: "Artist Name")
+    
+    DetailText(text: "Secondary information")
     
     CaptionText(text: "Album Name")
 }

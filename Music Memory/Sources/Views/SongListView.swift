@@ -61,7 +61,7 @@ struct SongRowView: View {
                         .lineLimit(1)
 
                     Text(song.artist)
-                        .font(AppFonts.caption)
+                        .font(AppFonts.detail)
                         .foregroundColor(AppColors.secondaryText)
                         .lineLimit(1)
                 }
@@ -74,13 +74,13 @@ struct SongRowView: View {
                     if let rankChange = rankChange {
                         HStack(spacing: 1) {
                             Image(systemName: rankChange.icon)
-                                .font(AppFonts.caption)
+                                .font(AppFonts.detail)
                                 .fontWeight(AppFontWeight.medium)
                                 .foregroundColor(rankChange.color)
                             
                             if let magnitude = rankChange.magnitude {
                                 Text("\(magnitude)")
-                                    .font(AppFonts.caption)
+                                    .font(AppFonts.detail)
                                     .fontWeight(AppFontWeight.medium)
                                     .foregroundColor(rankChange.color)
                             }
@@ -146,12 +146,12 @@ struct PlayCountView: View {
     var body: some View {
         VStack {
             Text("\(count)")
-                .font(AppFonts.caption)
+                .font(AppFonts.detail)
                 .fontWeight(AppFontWeight.semibold)
                 .foregroundColor(count > 0 ? AppColors.primaryText : AppColors.secondaryText)
             
             Text("plays")
-                .font(AppFonts.caption)
+                .font(AppFonts.detail)
                 .foregroundColor(AppColors.secondaryText)
         }
     }
