@@ -85,7 +85,7 @@ struct SongRowView: View {
                                     .foregroundColor(rankChange.color)
                             }
                         }
-                        .frame(width: 20, height: 12)
+                        .frame(width: 30, height: 12)
                     }
                 }
             }
