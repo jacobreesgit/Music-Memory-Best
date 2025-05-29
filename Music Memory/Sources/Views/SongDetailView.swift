@@ -23,7 +23,6 @@ struct SongDetailView: View {
             VStack(spacing: AppSpacing.large) {
                 ArtworkDetailView(
                     artwork: viewModel.artwork,
-                    enhancedArtwork: viewModel.song.enhancedArtwork,
                     isCurrentlyPlaying: isCurrentlyPlaying,
                     isActivelyPlaying: isActivelyPlaying
                 )
@@ -34,7 +33,7 @@ struct SongDetailView: View {
                         TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
                             .multilineTextAlignment(.center)
                         
-                        // Show MusicKit enhancement indicator
+                        // Show MusicKit enhancement indicator if available (ready for future)
                         if viewModel.song.hasEnhancedData {
                             Image(systemName: "sparkles")
                                 .font(.title3)
@@ -66,7 +65,7 @@ struct SongDetailView: View {
                 Divider()
                     .padding(.top, AppSpacing.small)
                 
-                // Enhanced information notice if MusicKit data is available
+                // Enhanced information notice if MusicKit data is available (ready for future)
                 if viewModel.song.hasEnhancedData {
                     HStack {
                         Image(systemName: "sparkles")
@@ -135,7 +134,7 @@ struct SongDetailView: View {
                             DetailRowView(label: "Enhanced Data", value: "MusicKit")
                             DetailRowView(label: "High-Quality Artwork", value: "Available")
                         } else {
-                            DetailRowView(label: "Enhancement Status", value: "Standard Quality")
+                            DetailRowView(label: "Enhancement Status", value: "Ready for Future Enhancement")
                         }
                     }
                 }

@@ -11,8 +11,8 @@ struct Song: Identifiable, Equatable, Hashable {
     let artwork: MPMediaItemArtwork?
     let mediaItem: MPMediaItem
     
-    // MARK: - MusicKit Enhancement Properties
-    let musicKitTrack: Track?
+    // MARK: - MusicKit Enhancement Properties (Ready for Future Implementation)
+    let musicKitTrack: MusicKit.Song?
     let enhancedArtwork: Artwork?
     
     // MARK: - Local Play Count Support
@@ -27,7 +27,7 @@ struct Song: Identifiable, Equatable, Hashable {
         UserDefaults.standard.integer(forKey: "localPlayCount_\(id)")
     }
     
-    init(from mediaItem: MPMediaItem, musicKitTrack: Track? = nil) {
+    init(from mediaItem: MPMediaItem, musicKitTrack: MusicKit.Song? = nil) {
         self.id = mediaItem.persistentID.stringValue
         self.title = mediaItem.title ?? "Unknown Title"
         self.artist = mediaItem.artist ?? "Unknown Artist"
@@ -37,24 +37,24 @@ struct Song: Identifiable, Equatable, Hashable {
         self.artwork = mediaItem.artwork
         self.mediaItem = mediaItem
         
-        // MusicKit enhancements
+        // MusicKit enhancements (for future implementation)
         self.musicKitTrack = musicKitTrack
         self.enhancedArtwork = musicKitTrack?.artwork
     }
     
-    // MARK: - Enhanced Artwork Access
+    // MARK: - Enhanced Data Access
     
     /// Get the best available artwork, preferring MusicKit if available
     var bestArtwork: Artwork? {
-        return enhancedArtwork
+        return enhancedArtwork // Will be nil for now, enhanced in future
     }
     
     /// Check if enhanced MusicKit data is available
     var hasEnhancedData: Bool {
-        return musicKitTrack != nil
+        return musicKitTrack != nil // Will be false for now, ready for future enhancement
     }
     
-    // MARK: - Local Play Count Methods
+    // MARK: - Local Play Count Methods (UNCHANGED - Critical to Preserve)
     
     /// Increment the local play count for this song
     func incrementLocalPlayCount() {

@@ -1,19 +1,16 @@
 import SwiftUI
 import MediaPlayer
-import MusicKit
 
 struct ArtworkView: View {
     let artwork: MPMediaItemArtwork?
-    let enhancedArtwork: Artwork?
     let size: CGFloat
     let isCurrentlyPlaying: Bool
     let isActivelyPlaying: Bool
     @State private var image: UIImage?
     @State private var animationOffset: CGFloat = 0
     
-    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
+    init(artwork: MPMediaItemArtwork?, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
         self.artwork = artwork
-        self.enhancedArtwork = enhancedArtwork
         self.size = size
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
@@ -22,7 +19,6 @@ struct ArtworkView: View {
     // Convenience initializer for Song objects
     init(song: Song, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
         self.artwork = song.artwork
-        self.enhancedArtwork = song.enhancedArtwork
         self.size = size
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
@@ -88,41 +84,9 @@ struct ArtworkView: View {
     }
     
     private func loadArtwork() {
-        Task {
-            // Try MusicKit artwork first (higher quality), fallback to MediaPlayer
-            if let enhancedArtwork = enhancedArtwork {
-                await loadMusicKitArtwork(enhancedArtwork)
-            } else if let artwork = artwork {
-                loadMediaPlayerArtwork(artwork)
-            }
-        }
-    }
-    
-    @MainActor
-    private func loadMusicKitArtwork(_ artwork: Artwork) async {
-        do {
-            // Request appropriate size for high quality
-            let artworkSize = CGSize(width: size * 2, height: size * 2) // 2x for retina
-            
-            if let artworkImage = try await artwork.image(at: artworkSize) {
-                self.image = artworkImage
-            } else {
-                // Fallback to MediaPlayer artwork if MusicKit fails
-                fallbackToMediaPlayerArtwork()
-            }
-        } catch {
-            // Fallback to MediaPlayer artwork if MusicKit fails
-            fallbackToMediaPlayerArtwork()
-        }
-    }
-    
-    private func loadMediaPlayerArtwork(_ artwork: MPMediaItemArtwork) {
-        image = artwork.image(at: CGSize(width: size, height: size))
-    }
-    
-    private func fallbackToMediaPlayerArtwork() {
+        // Use MediaPlayer artwork - MusicKit enhancement ready for future implementation
         if let artwork = artwork {
-            loadMediaPlayerArtwork(artwork)
+            image = artwork.image(at: CGSize(width: size, height: size))
         }
     }
     
@@ -144,15 +108,13 @@ struct ArtworkView: View {
 
 struct ArtworkDetailView: View {
     let artwork: UIImage?
-    let enhancedArtwork: Artwork?
     let isCurrentlyPlaying: Bool
     let isActivelyPlaying: Bool
     @State private var displayImage: UIImage?
     @State private var animationOffset: CGFloat = 0
     
-    init(artwork: UIImage?, enhancedArtwork: Artwork? = nil, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool) {
+    init(artwork: UIImage?, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool) {
         self.artwork = artwork
-        self.enhancedArtwork = enhancedArtwork
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
     }
@@ -220,35 +182,9 @@ struct ArtworkDetailView: View {
     }
     
     private func loadDetailArtwork() {
-        Task {
-            // Try MusicKit artwork first for higher quality detail view
-            if let enhancedArtwork = enhancedArtwork {
-                await loadMusicKitDetailArtwork(enhancedArtwork)
-            } else if let artwork = artwork {
-                await MainActor.run {
-                    self.displayImage = artwork
-                }
-            }
-        }
-    }
-    
-    @MainActor
-    private func loadMusicKitDetailArtwork(_ artwork: Artwork) async {
-        do {
-            // Request high resolution for detail view
-            let artworkSize = CGSize(width: 600, height: 600) // High res for detail view
-            
-            if let artworkImage = try await artwork.image(at: artworkSize) {
-                self.displayImage = artworkImage
-            } else if let fallbackArtwork = self.artwork {
-                // Fallback to provided artwork
-                self.displayImage = fallbackArtwork
-            }
-        } catch {
-            // Fallback to provided artwork
-            if let fallbackArtwork = self.artwork {
-                self.displayImage = fallbackArtwork
-            }
+        // Use provided artwork - MusicKit enhancement ready for future implementation
+        if let artwork = artwork {
+            displayImage = artwork
         }
     }
     

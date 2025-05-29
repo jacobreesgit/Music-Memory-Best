@@ -36,17 +36,12 @@ class PermissionService: PermissionServiceProtocol {
     }
     
     func requestMusicKitPermission() async -> Bool {
-        do {
-            let status = await MusicAuthorization.request()
-            return status == .authorized
-        } catch {
-            print("Failed to request MusicKit permission: \(error.localizedDescription)")
-            return false
-        }
+        let status = await MusicAuthorization.request()
+        return status == .authorized
     }
     
     func checkMusicKitPermissionStatus() async -> AppPermissionStatus {
-        let status = await MusicAuthorization.currentStatus
+        let status = MusicAuthorization.currentStatus
         
         switch status {
         case .notDetermined:
