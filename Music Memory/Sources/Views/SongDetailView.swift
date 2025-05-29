@@ -21,7 +21,6 @@ struct SongDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppSpacing.large) {
-                // Artwork section - no longer clickable, just displays visual state
                 ArtworkDetailView(
                     artwork: viewModel.artwork,
                     isCurrentlyPlaying: isCurrentlyPlaying,
@@ -36,7 +35,7 @@ struct SongDetailView: View {
                     SubheadlineText(text: viewModel.song.artist)
                     SubheadlineText(text: viewModel.song.album)
                     
-                    // Play count highlight - using displayedPlayCount
+                    // Play count highlight
                     HStack {
                         Spacer()
                         VStack {
@@ -108,15 +107,6 @@ struct SongDetailView: View {
             .padding(.bottom, 90) // Add bottom padding to account for the Now Playing bar
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    // Share functionality could be implemented here
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                }
-            }
-        }
     }
 }
 
@@ -173,7 +163,6 @@ struct ArtworkDetailView: View {
     
     var body: some View {
         ZStack {
-            // Base artwork
             Group {
                 if let artwork = artwork {
                     Image(uiImage: artwork)
@@ -194,15 +183,13 @@ struct ArtworkDetailView: View {
             }
             .frame(maxWidth: 300, maxHeight: 300)
             
-            // Overlay for currently playing song
             if isCurrentlyPlaying {
-                // Semi-transparent overlay
                 RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(Color.black.opacity(0.6))
                     .frame(maxWidth: 300, maxHeight: 300)
                 
                 if isActivelyPlaying {
-                    // Animated equalizer bars for actively playing - FASTER ANIMATION
+                    // Animated equalizer bars for actively playing
                     HStack(spacing: 4) {
                         ForEach(0..<4, id: \.self) { index in
                             RoundedRectangle(cornerRadius: 2)

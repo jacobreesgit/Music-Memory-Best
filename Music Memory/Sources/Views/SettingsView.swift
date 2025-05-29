@@ -23,7 +23,6 @@ struct SettingsView: View {
                     
                     // Settings Content
                     VStack(spacing: AppSpacing.large) {
-                        // Data Management Card
                         AppCard {
                             VStack(spacing: AppSpacing.medium) {
                                 // Card Header
@@ -42,7 +41,7 @@ struct SettingsView: View {
                                 
                                 Divider()
                                 
-                                // Data Description with larger spacing before button
+                                // Data Description
                                 VStack(alignment: .leading, spacing: AppSpacing.large) {
                                     VStack(alignment: .leading, spacing: AppSpacing.small) {
                                         InfoRow(
@@ -64,7 +63,7 @@ struct SettingsView: View {
                                         )
                                     }
                                     
-                                    // Clear Data Button - now with AppSpacing.large separation
+                                    // Clear Data Button
                                     Button(action: {
                                         viewModel.showClearDataConfirmation()
                                     }) {

@@ -23,7 +23,6 @@ struct NowPlayingBar: View {
                 HStack(spacing: AppSpacing.small) {
                     // Clickable area: Artwork, rank, song info, and spacer
                     HStack(spacing: AppSpacing.small) {
-                        // Custom artwork display logic matched exactly with ArtworkView
                         Group {
                             if let image = currentImage {
                                 Image(uiImage: image)
@@ -41,7 +40,7 @@ struct NowPlayingBar: View {
                         .background(AppColors.secondaryBackground)
                         .cornerRadius(AppRadius.small)
                         
-                        // Rank number - using dynamic width based on digit count
+                        // Rank number
                         if let rank = viewModel.currentSongRank {
                             Text("\(rank)")
                                 .font(AppFonts.callout)
@@ -50,7 +49,7 @@ struct NowPlayingBar: View {
                                 .frame(width: rank >= 1000 ? 47 : 37, alignment: .center)
                         }
                         
-                        // Song info - Using smaller design system text components for compact space
+                        // Song info
                         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
                             Text(viewModel.title)
                                 .font(AppFonts.callout)
@@ -77,11 +76,9 @@ struct NowPlayingBar: View {
                             }
                         }
                         
-                        // Spacer is now part of the clickable area
                         Spacer()
                     }
-                    // Apply navigation gestures to the entire left area including spacer
-                    .contentShape(Rectangle()) // Make the entire area tappable
+                    .contentShape(Rectangle())
                     .scaleEffect(isPressed ? 0.98 : 1.0) // Visual feedback for press
                     .animation(.easeInOut(duration: 0.1), value: isPressed)
                     .onLongPressGesture(
@@ -148,13 +145,12 @@ struct NowPlayingBar: View {
                         }
                     }
                 }
-                .padding(.leading, AppSpacing.medium) // Specify left padding
-                .padding(.trailing, 16) // Specify right padding
+                .padding(.horizontal, AppSpacing.medium)
                 .padding(.vertical, AppSpacing.small)
                 .background(.ultraThinMaterial)
                 .cornerRadius(AppRadius.medium)
                 .appShadow(AppShadow.medium)
-                .padding(.horizontal, AppSpacing.medium)
+                .padding(.horizontal, 20) // Now Playing Bar Width
             }
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(), value: viewModel.isVisible)
@@ -265,8 +261,7 @@ class NowPlayingViewModel: ObservableObject {
     
     /// Called by AppLifecycleManager to check if artwork should be restored
     func checkForArtworkRestoration() {
-        // This method can be called when the app becomes active
-        // to ensure saved artwork is properly restored
+        // This method can be called when the app becomes active to ensure saved artwork is properly restored
         if let _ = currentSong, currentImage == nil {
             loadSavedArtworkIfNeeded()
         }

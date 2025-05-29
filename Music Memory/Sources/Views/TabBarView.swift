@@ -91,7 +91,6 @@ struct TabBarView: View {
             }
             .accentColor(AppColors.primary)
             .onAppear {
-                // Set tab bar appearance to use solid colors instead of material
                 let tabBarAppearance = UITabBarAppearance()
                 tabBarAppearance.configureWithDefaultBackground()
                 UITabBar.appearance().standardAppearance = tabBarAppearance

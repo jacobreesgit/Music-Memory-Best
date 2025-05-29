@@ -69,10 +69,8 @@ struct SongRowView: View {
                 Spacer()
                 
                 HStack(spacing: AppSpacing.small) {
-                    // Use displayedPlayCount instead of playCount
                     PlayCountView(count: song.displayedPlayCount)
                     
-                    // Rank change indicator with magnitude - positioned right of plays
                     if let rankChange = rankChange {
                         HStack(spacing: 1) {
                             Image(systemName: rankChange.icon)
@@ -91,12 +89,12 @@ struct SongRowView: View {
                     }
                 }
             }
-            .contentShape(Rectangle()) // Make the entire area including spacer tappable
+            .contentShape(Rectangle())
             .onTapGesture {
                 onNavigate()
             }
         }
-        .padding(.vertical, 0) // Removed all vertical padding from the row
+        .padding(.vertical, 0)
     }
 }
 
@@ -112,12 +110,10 @@ struct SongListView: View {
                     index: index,
                     rankChange: viewModel.rankChanges[song.id],
                     onPlay: {
-                        // Provide medium impact haptic feedback for playing song (important action)
                         AppHaptics.mediumImpact()
                         playSongFromQueue(song, queue: viewModel.songs)
                     },
                     onNavigate: {
-                        // Provide success haptic feedback for successful navigation
                         AppHaptics.success()
                         navigationManager.navigateToSongDetail(song: song)
                     }
@@ -125,7 +121,6 @@ struct SongListView: View {
                 .listRowInsets(EdgeInsets(top: AppSpacing.small, leading: 16, bottom: AppSpacing.small, trailing: 16))
             }
         }
-//        .contentMargins(.horizontal, AppSpacing.medium)
         .overlay(
             Group {
                 if viewModel.songs.isEmpty && !viewModel.isLoading {
@@ -179,7 +174,6 @@ struct ArtworkView: View {
     
     var body: some View {
         ZStack {
-            // Base artwork
             Group {
                 if let image = image {
                     Image(uiImage: image)
@@ -196,7 +190,6 @@ struct ArtworkView: View {
             .frame(width: size, height: size)
             .background(AppColors.secondaryBackground)
             
-            // Overlay for currently selected song
             if isCurrentlyPlaying {
                 // Semi-transparent overlay
                 Rectangle()
@@ -204,14 +197,14 @@ struct ArtworkView: View {
                     .frame(width: size, height: size)
                 
                 if isActivelyPlaying {
-                    // Animated equalizer bars for actively playing - FASTER ANIMATION
+                    // Animated equalizer bars for actively playing
                     HStack(spacing: 2) {
                         ForEach(0..<3, id: \.self) { index in
                             RoundedRectangle(cornerRadius: 1)
                                 .fill(Color.white)
                                 .frame(width: 3, height: getBarHeight(for: index))
                                 .animation(
-                                    .easeInOut(duration: 0.25 + Double(index) * 0.1) // Reduced from 0.5 + 0.2 to 0.25 + 0.1
+                                    .easeInOut(duration: 0.25 + Double(index) * 0.1)
                                     .repeatForever(autoreverses: true),
                                     value: animationOffset
                                 )
