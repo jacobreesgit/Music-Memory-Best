@@ -564,36 +564,41 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     @MainActor
-    private func loadEnhancedArtworkAsync(for song: Song) {
-        // Try MusicKit artwork first (higher quality)
-        if let enhancedArtwork = song.enhancedArtwork {
-            Task {
-                do {
-                    let artworkImage = try await enhancedArtwork.image(at: CGSize(width: 90, height: 90))
-                    self.currentImage = artworkImage
-                    logger.log("Loaded MusicKit artwork for now playing: '\(song.title)'", level: .debug)
-                    return
-                } catch {
-                    logger.log("Failed to load MusicKit artwork for now playing: \(error.localizedDescription)", level: .debug)
-                    // Fall through to MediaPlayer artwork
-                }
-            }
-        }
-        
-        // Fallback to MediaPlayer artwork
-        if let artwork = song.artwork {
-            Task {
-                let image = await withCheckedContinuation { continuation in
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        let artworkImage = artwork.image(at: CGSize(width: 90, height: 90))
-                        continuation.resume(returning: artworkImage)
+        private func loadEnhancedArtworkAsync(for song: Song) {
+            // Try MusicKit artwork first (higher quality)
+            if let enhancedArtwork = song.enhancedArtwork {
+                Task {
+                    do {
+                        // MusicKit Artwork uses url(width:height:) method to get URL, then fetch data
+                        if let artworkURL = enhancedArtwork.url(width: 90, height: 90) {
+                            let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                            if let artworkImage = UIImage(data: data) {
+                                self.currentImage = artworkImage
+                                logger.log("Loaded MusicKit artwork for now playing: '\(song.title)'", level: .debug)
+                                return
+                            }
+                        }
+                    } catch {
+                        logger.log("Failed to load MusicKit artwork for now playing: \(error.localizedDescription)", level: .debug)
+                        // Fall through to MediaPlayer artwork
                     }
                 }
-                self.currentImage = image
-                logger.log("Loaded MediaPlayer artwork for now playing: '\(song.title)'", level: .debug)
+            }
+            
+            // Fallback to MediaPlayer artwork
+            if let artwork = song.artwork {
+                Task {
+                    let image = await withCheckedContinuation { continuation in
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            let artworkImage = artwork.image(at: CGSize(width: 90, height: 90))
+                            continuation.resume(returning: artworkImage)
+                        }
+                    }
+                    self.currentImage = image
+                    logger.log("Loaded MediaPlayer artwork for now playing: '\(song.title)'", level: .debug)
+                }
             }
         }
-    }
     
     func togglePlayback() {
         if musicPlayer.playbackState == .playing {

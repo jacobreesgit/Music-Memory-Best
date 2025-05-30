@@ -141,14 +141,16 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         
         // Create search requests for the batch
         let searchTasks = songs.map { song in
-            searchMusicKitSong(for: song)
+            Task {
+                await searchMusicKitSong(for: song)
+            }
         }
         
         // Execute searches concurrently
         let results = await withTaskGroup(of: (Song, MusicKit.Song?).self, returning: [(Song, MusicKit.Song?)].self) { group in
             for (index, task) in searchTasks.enumerated() {
                 group.addTask {
-                    let musicKitSong = await task
+                    let musicKitSong = await task.value
                     return (songs[index], musicKitSong)
                 }
             }
