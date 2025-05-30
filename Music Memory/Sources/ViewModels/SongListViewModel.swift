@@ -54,25 +54,36 @@ class SongListViewModel: ObservableObject {
     private let logger: LoggerProtocol
     private let rankHistoryService: RankHistoryServiceProtocol
     private let priorityService: EnhancementPriorityServiceProtocol
+    
+    // CRITICAL FIX: Add cache services
+    private let enhancedSongCacheService: EnhancedSongCacheServiceProtocol
+    private let cacheManagementService: CacheManagementServiceProtocol
+    
     private var cancellables = Set<AnyCancellable>()
     private var isAppLaunching = true
     let errorSubject = PassthroughSubject<AppError, Never>()
     
-    // Enhancement control
+    // Enhancement control with better management
     private var enhancementTask: Task<Void, Never>?
     private var appIdleTimer: Timer?
     private var statsUpdateTimer: Timer?
+    private var cacheValidationTimer: Timer?
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
         logger: LoggerProtocol,
         rankHistoryService: RankHistoryServiceProtocol,
-        priorityService: EnhancementPriorityServiceProtocol
+        priorityService: EnhancementPriorityServiceProtocol,
+        enhancedSongCacheService: EnhancedSongCacheServiceProtocol,
+        cacheManagementService: CacheManagementServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.logger = logger
         self.rankHistoryService = rankHistoryService
         self.priorityService = priorityService
+        self.enhancedSongCacheService = enhancedSongCacheService
+        self.cacheManagementService = cacheManagementService
+        
         setupErrorHandling()
         setupPlayCompletionListener()
         setupLocalDataClearedListener()
@@ -81,10 +92,16 @@ class SongListViewModel: ObservableObject {
         // Start periodic stats updates
         startStatsUpdateTimer()
         
+        // CRITICAL FIX: Start cache validation timer
+        startCacheValidationTimer()
+        
         // Cleanup old snapshots on initialization (once per app launch)
         Task {
             await MainActor.run {
                 rankHistoryService.cleanupOldSnapshots()
+                
+                // CRITICAL FIX: Perform cache validation and cleanup on launch
+                performInitialCacheValidation()
             }
         }
     }
@@ -93,6 +110,47 @@ class SongListViewModel: ObservableObject {
         enhancementTask?.cancel()
         appIdleTimer?.invalidate()
         statsUpdateTimer?.invalidate()
+        cacheValidationTimer?.invalidate()
+    }
+    
+    // CRITICAL FIX: Cache validation and management
+    private func performInitialCacheValidation() {
+        Task {
+            // Validate caches on app launch
+            let validationResult = cacheManagementService.validateAllCaches()
+            
+            if validationResult.totalProblems > 0 {
+                logger.log("Found \(validationResult.totalProblems) cache problems on app launch", level: .warning)
+                
+                // Perform cleanup if there are significant problems
+                if validationResult.totalProblems > 50 {
+                    logger.log("Performing cleanup due to cache problems", level: .info)
+                    cacheManagementService.performPeriodicCleanup()
+                }
+            }
+        }
+    }
+    
+    private func startCacheValidationTimer() {
+        // Validate cache health every 5 minutes
+        cacheValidationTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
+            self?.validateCacheHealth()
+        }
+    }
+    
+    private func validateCacheHealth() {
+        Task {
+            let healthScore = cacheManagementService.getCacheHealthScore()
+            
+            if healthScore < 0.7 {
+                logger.log("Cache health degraded (score: \(String(format: "%.2f", healthScore)))", level: .warning)
+                
+                if cacheManagementService.shouldPerformCleanup() {
+                    logger.log("Performing automatic cache cleanup", level: .info)
+                    cacheManagementService.performPeriodicCleanup()
+                }
+            }
+        }
     }
     
     private func setupErrorHandling() {
@@ -165,6 +223,14 @@ class SongListViewModel: ObservableObject {
         
         // Resume enhancement if needed
         resumeEnhancementIfNeeded()
+        
+        // CRITICAL FIX: Check for cache inconsistencies after app returns from background
+        Task {
+            let validationResult = cacheManagementService.validateAllCaches()
+            if validationResult.totalProblems > 0 {
+                logger.log("Found \(validationResult.totalProblems) cache problems after returning from background", level: .info)
+            }
+        }
     }
     
     private func handleAppEnteredBackground() {
@@ -187,7 +253,7 @@ class SongListViewModel: ObservableObject {
     }
     
     private func handleLocalDataCleared() {
-        logger.log("Local data cleared - refreshing song list", level: .info)
+        logger.log("Local data cleared - refreshing song list and caches", level: .info)
         
         // Clear rank changes since rank history was cleared
         rankChanges.removeAll()
@@ -198,12 +264,19 @@ class SongListViewModel: ObservableObject {
         // Update priority service with new song states
         priorityService.updateSongsList(allSongs)
         
+        // CRITICAL FIX: Reset enhancement progress since caches were cleared
+        enhancementProgress = EnhancementProgress(totalCount: allSongs.count)
+        enhancementStats = priorityService.getEnhancementStats()
+        
         // Post notification to update Now Playing bar
         NotificationCenter.default.post(
             name: .songsListUpdated,
             object: nil,
             userInfo: [Notification.SongKeys.updatedSongs: songs]
         )
+        
+        // CRITICAL FIX: Restart enhancement since caches were cleared
+        startOptimizedEnhancement()
     }
     
     private func handleSongPlayCompleted(songId: String) {
@@ -274,7 +347,7 @@ class SongListViewModel: ObservableObject {
         // Only show loading for permission check and initial MediaPlayer fetch
         isLoading = true
         
-        logger.log("Loading songs with optimized smart priority enhancement", level: .info)
+        logger.log("Loading songs with integrated caching system", level: .info)
         
         do {
             // Check current permission status first
@@ -282,28 +355,29 @@ class SongListViewModel: ObservableObject {
             
             // If permission is granted, load songs
             if permissionStatus == .granted {
-                // Step 1: Load MediaPlayer songs immediately (no loading screen)
-                let mediaPlayerSongs = try await loadMediaPlayerSongs()
+                // CRITICAL FIX: Load songs with cache integration
+                let songsWithCache = try await loadSongsWithCacheIntegration()
                 
                 // Sync play counts only on fresh app launch
                 if isAppLaunching {
                     logger.log("App launching - syncing play counts", level: .info)
-                    for song in mediaPlayerSongs {
+                    for song in songsWithCache {
                         song.syncPlayCounts(logger: logger)
                     }
                     isAppLaunching = false
                 }
                 
-                // Step 2: Show MediaPlayer data immediately
-                self.allSongs = mediaPlayerSongs
+                // Show data immediately (MediaPlayer + cached enhancements)
+                self.allSongs = songsWithCache
                 applySorting()
                 
-                // Step 3: Initialize priority service with songs and current sort order (non-blocking)
+                // Initialize priority service with songs and current sort order (non-blocking)
                 priorityService.updateSongsList(allSongs)
                 priorityService.setCurrentSortOrder(sortDescriptor)
                 
-                // Initialize enhancement progress
-                enhancementProgress = EnhancementProgress(totalCount: mediaPlayerSongs.count)
+                // CRITICAL FIX: Initialize enhancement progress based on actual cache state
+                let cachedCount = allSongs.filter { enhancedSongCacheService.isSongEnhanced($0.id) }.count
+                enhancementProgress = EnhancementProgress(totalCount: allSongs.count, enhancedCount: cachedCount)
                 enhancementStats = priorityService.getEnhancementStats()
                 
                 // Compute initial rank changes when loading songs
@@ -314,7 +388,7 @@ class SongListViewModel: ObservableObject {
                 // Stop loading indicator - data is now visible
                 isLoading = false
                 
-                logger.log("Loaded \(mediaPlayerSongs.count) songs from MediaPlayer - starting optimized enhancement", level: .info)
+                logger.log("Loaded \(allSongs.count) songs (\(cachedCount) from cache) - starting intelligent enhancement", level: .info)
                 
                 // Initial notification to update Now Playing bar rank
                 NotificationCenter.default.post(
@@ -326,8 +400,10 @@ class SongListViewModel: ObservableObject {
                 // Ensure NowPlayingViewModel has the current songs list
                 NowPlayingViewModel.shared.updateSongsList(songs)
                 
-                // Step 4: Start optimized enhancement in background
-                startOptimizedEnhancement()
+                // CRITICAL FIX: Start coordinated cache warmup and enhancement
+                Task {
+                    await startCoordinatedEnhancement()
+                }
                 
                 // Start idle detection for background priority
                 startIdleDetectionTimer()
@@ -341,12 +417,23 @@ class SongListViewModel: ObservableObject {
         }
     }
     
-    private func loadMediaPlayerSongs() async throws -> [Song] {
+    // CRITICAL FIX: Integrated cache loading
+    private func loadSongsWithCacheIntegration() async throws -> [Song] {
         guard await musicLibraryService.checkPermissionStatus() == .granted else {
             throw AppError.permissionDenied
         }
         
+        // Use the music library service which now integrates with caching
         return try await musicLibraryService.fetchSongs()
+    }
+    
+    // CRITICAL FIX: Coordinated enhancement that respects caches
+    private func startCoordinatedEnhancement() async {
+        // Check if we need cache warmup
+        await cacheManagementService.coordinatedCacheWarmup(for: allSongs)
+        
+        // Start regular enhancement for remaining songs
+        startOptimizedEnhancement()
     }
     
     private func startOptimizedEnhancement() {
@@ -360,14 +447,14 @@ class SongListViewModel: ObservableObject {
     }
     
     private func runOptimizedEnhancement() async {
-        logger.log("Starting optimized smart priority enhancement", level: .info)
+        logger.log("Starting optimized smart priority enhancement with cache integration", level: .info)
         
         var completedBatches = 0
         let maxBatchesBeforeBreak = 3 // Smaller batches, more frequent breaks
         
         while !Task.isCancelled {
-            // Get next priority batch (non-blocking call)
-            let enhancedSongs = await musicLibraryService.enhanceSongsBatch(batchSize: 3) // Smaller batches
+            // Get next priority batch (non-blocking call) - this now respects caching
+            let enhancedSongs = await musicLibraryService.enhanceSongsBatch(batchSize: 3)
             
             if enhancedSongs.isEmpty {
                 // No more songs to enhance
@@ -415,8 +502,10 @@ class SongListViewModel: ObservableObject {
                 allSongs[index] = enhancedSong
                 hasChanges = true
                 
-                // Update enhancement progress
-                enhancementProgress.enhancedCount += 1
+                // CRITICAL FIX: Only increment if not already enhanced
+                if !enhancedSongCacheService.isSongEnhanced(enhancedSong.id) {
+                    enhancementProgress.enhancedCount += 1
+                }
                 
                 logger.log("Smart enhancement: Updated '\(enhancedSong.title)' (\(enhancementProgress.enhancedCount)/\(enhancementProgress.totalCount))", level: .debug)
             }
@@ -529,14 +618,41 @@ class SongListViewModel: ObservableObject {
             errorSubject.send(AppError.unknown(error))
         }
     }
+    
+    // MARK: - Cache Management Methods
+    
+    func getCacheStatistics() -> CacheStatistics {
+        return cacheManagementService.getCacheStatistics()
+    }
+    
+    func getCacheHealthScore() -> Double {
+        return cacheManagementService.getCacheHealthScore()
+    }
+    
+    func performManualCacheCleanup() {
+        Task {
+            cacheManagementService.performPeriodicCleanup()
+            
+            // Refresh stats after cleanup
+            await MainActor.run {
+                enhancementStats = priorityService.getEnhancementStats()
+            }
+        }
+    }
 }
 
-// MARK: - Enhancement Progress Tracking
+// MARK: - Enhancement Progress Tracking (Updated)
 
 struct EnhancementProgress {
     var totalCount: Int = 0
     var enhancedCount: Int = 0
     var isComplete: Bool = false
+    
+    init(totalCount: Int = 0, enhancedCount: Int = 0) {
+        self.totalCount = totalCount
+        self.enhancedCount = enhancedCount
+        self.isComplete = false
+    }
     
     var progress: Double {
         guard totalCount > 0 else { return 0 }

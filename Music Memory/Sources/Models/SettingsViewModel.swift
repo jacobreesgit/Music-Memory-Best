@@ -6,6 +6,8 @@ class SettingsViewModel: ObservableObject {
     @Published var showingClearDataAlert = false
     @Published var isClearing = false
     @Published var localDataSize = "Calculating..."
+    @Published var cacheIntegrityReport: CacheIntegrityReport?
+    @Published var isValidatingCache = false
     
     private let settingsService: SettingsServiceProtocol
     private let logger: LoggerProtocol
@@ -14,8 +16,9 @@ class SettingsViewModel: ObservableObject {
         self.settingsService = settingsService
         self.logger = logger
         
-        // Calculate initial data size
+        // Calculate initial data size and validate cache
         calculateDataSize()
+        validateCacheIntegrity()
     }
     
     func calculateDataSize() {
@@ -26,6 +29,22 @@ class SettingsViewModel: ObservableObject {
             
             await MainActor.run {
                 self.localDataSize = size
+            }
+        }
+    }
+    
+    // CRITICAL FIX: Cache integrity validation
+    func validateCacheIntegrity() {
+        isValidatingCache = true
+        
+        Task {
+            let report = await Task.detached { [settingsService] in
+                return settingsService.validateCacheIntegrity()
+            }.value
+            
+            await MainActor.run {
+                self.cacheIntegrityReport = report
+                self.isValidatingCache = false
             }
         }
     }
@@ -51,6 +70,9 @@ class SettingsViewModel: ObservableObject {
         // Update data size after clearing
         calculateDataSize()
         
+        // CRITICAL FIX: Re-validate cache after clearing
+        validateCacheIntegrity()
+        
         isClearing = false
         
         // Provide success haptic feedback
@@ -62,28 +84,74 @@ class SettingsViewModel: ObservableObject {
         NotificationCenter.default.post(name: .localDataCleared, object: nil)
     }
     
-    // MARK: - Additional Cache Info Methods (for detailed view if needed)
+    // MARK: - Cache Management Methods
     
-    func getDetailedCacheInfo() -> CacheInfo {
-        // Get individual cache sizes for detailed breakdown
-        let playCountSize = (settingsService as? SettingsService)?.getPlayCountCacheSize() ?? "Unknown"
-        let rankHistorySize = (settingsService as? SettingsService)?.getRankHistoryCacheSize() ?? "Unknown"
-        let enhancedSongSize = (settingsService as? SettingsService)?.getEnhancedSongCacheSize() ?? "Unknown"
-        let artworkSize = (settingsService as? SettingsService)?.getArtworkCacheSize() ?? "Unknown"
-        let musicKitSearchSize = (settingsService as? SettingsService)?.getMusicKitSearchCacheSize() ?? "Unknown"
+    func getDetailedCacheInfo() -> CacheBreakdown {
+        // Get detailed cache breakdown from service
+        return settingsService.getDetailedCacheBreakdown()
+    }
+    
+    func getCacheIntegrityReport() -> CacheIntegrityReport? {
+        return cacheIntegrityReport
+    }
+    
+    func refreshCacheValidation() {
+        validateCacheIntegrity()
+    }
+    
+    // MARK: - Legacy Cache Info Methods (Updated to use new system)
+    
+    func getPlayCountCacheSize() -> String {
+        return (settingsService as? SettingsService)?.getPlayCountCacheSize() ?? "Unknown"
+    }
+    
+    func getRankHistoryCacheSize() -> String {
+        return (settingsService as? SettingsService)?.getRankHistoryCacheSize() ?? "Unknown"
+    }
+    
+    func getEnhancedSongCacheSize() -> String {
+        return (settingsService as? SettingsService)?.getEnhancedSongCacheSize() ?? "Unknown"
+    }
+    
+    func getArtworkCacheSize() -> String {
+        return (settingsService as? SettingsService)?.getArtworkCacheSize() ?? "Unknown"
+    }
+    
+    func getMusicKitSearchCacheSize() -> String {
+        return (settingsService as? SettingsService)?.getMusicKitSearchCacheSize() ?? "Unknown"
+    }
+    
+    // MARK: - Cache Health Summary
+    
+    var cacheHealthSummary: String {
+        guard let report = cacheIntegrityReport else {
+            return "Validating..."
+        }
         
-        return CacheInfo(
-            totalSize: localDataSize,
-            playCountSize: playCountSize,
-            rankHistorySize: rankHistorySize,
-            enhancedSongSize: enhancedSongSize,
-            artworkSize: artworkSize,
-            musicKitSearchSize: musicKitSearchSize
-        )
+        return report.problemSummary
+    }
+    
+    var cacheHealthColor: Color {
+        guard let report = cacheIntegrityReport else {
+            return AppColors.secondary
+        }
+        
+        if report.healthScore >= 0.8 {
+            return AppColors.success
+        } else if report.healthScore >= 0.5 {
+            return AppColors.warning
+        } else {
+            return AppColors.destructive
+        }
+    }
+    
+    var shouldShowCacheWarning: Bool {
+        guard let report = cacheIntegrityReport else { return false }
+        return report.hasProblems
     }
 }
 
-// MARK: - Cache Info Structure
+// MARK: - Cache Info Structure (Updated for compatibility)
 
 struct CacheInfo {
     let totalSize: String
@@ -102,9 +170,44 @@ struct CacheInfo {
             ("MusicKit Search Cache", musicKitSearchSize)
         ]
     }
+    
+    // CRITICAL FIX: Create from CacheBreakdown
+    init(from breakdown: CacheBreakdown) {
+        self.totalSize = breakdown.totalSize
+        self.playCountSize = breakdown.playCountSize
+        self.rankHistorySize = breakdown.rankHistorySize
+        self.enhancedSongSize = breakdown.enhancedSongSize
+        self.artworkSize = breakdown.artworkSize
+        self.musicKitSearchSize = breakdown.musicKitSearchSize
+    }
+    
+    // Legacy initializer for backward compatibility
+    init(
+        totalSize: String,
+        playCountSize: String,
+        rankHistorySize: String,
+        enhancedSongSize: String,
+        artworkSize: String,
+        musicKitSearchSize: String
+    ) {
+        self.totalSize = totalSize
+        self.playCountSize = playCountSize
+        self.rankHistorySize = rankHistorySize
+        self.enhancedSongSize = enhancedSongSize
+        self.artworkSize = artworkSize
+        self.musicKitSearchSize = musicKitSearchSize
+    }
 }
 
-// Add notification for data clearing
+// Extension to bridge the old API to the new system
+extension SettingsViewModel {
+    func getDetailedCacheInfoLegacy() -> CacheInfo {
+        let breakdown = getDetailedCacheInfo()
+        return CacheInfo(from: breakdown)
+    }
+}
+
+// Add notification for data clearing (if not already present)
 extension NSNotification.Name {
     static let localDataCleared = NSNotification.Name("localDataCleared")
 }

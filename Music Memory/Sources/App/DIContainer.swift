@@ -43,7 +43,7 @@ class DIContainer: ObservableObject {
         self.cacheManagementService = cacheManagementService
     }
     
-    // Factory method for production
+    // Factory method for production with proper dependency injection
     static func production() -> DIContainer {
         let logger = Logger()
         let permissionService = PermissionService()
@@ -52,10 +52,13 @@ class DIContainer: ObservableObject {
         let enhancedSongCacheService = EnhancedSongCacheService(logger: logger)
         let enhancementPriorityService = EnhancementPriorityService(logger: logger)
         
+        // CRITICAL FIX: Inject cache services into MusicLibraryService
         let musicLibraryService = MusicLibraryService(
             permissionService: permissionService,
             logger: logger,
-            priorityService: enhancementPriorityService
+            priorityService: enhancementPriorityService,
+            enhancedSongCacheService: enhancedSongCacheService,
+            artworkPersistenceService: artworkPersistenceService
         )
         
         let cacheManagementService = CacheManagementService(

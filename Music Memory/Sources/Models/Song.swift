@@ -15,6 +15,9 @@ struct Song: Identifiable, Equatable, Hashable {
     let musicKitSong: MusicKit.Song?
     let enhancedArtwork: Artwork?
     
+    // MARK: - Cached Enhancement Data (CRITICAL FIX)
+    private let cachedEnhancement: CachedSongEnhancement?
+    
     // MARK: - Local Play Count Support (UNCHANGED - Critical to Preserve)
     
     /// Computed property that combines system play count with local tracking
@@ -41,73 +44,128 @@ struct Song: Identifiable, Equatable, Hashable {
         // MusicKit enhancements
         self.musicKitSong = musicKitTrack
         self.enhancedArtwork = musicKitTrack?.artwork
+        
+        // CRITICAL FIX: Load cached enhancement data
+        self.cachedEnhancement = Self.loadCachedEnhancement(for: self.id)
     }
     
-    // MARK: - Enhanced Data Access
+    // CRITICAL FIX: Method to load cached enhancement data
+    private static func loadCachedEnhancement(for songId: String) -> CachedSongEnhancement? {
+        let key = UserDefaultsKeys.enhancedSongKey(for: songId)
+        
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cachedEnhancement = try? JSONDecoder().decode(CachedSongEnhancement.self, from: data) else {
+            return nil
+        }
+        
+        // Check if cache is still valid
+        let maxAge: TimeInterval = 14 * 24 * 60 * 60 // 14 days
+        if Date().timeIntervalSince(cachedEnhancement.timestamp) > maxAge {
+            return nil
+        }
+        
+        if cachedEnhancement.version != CachedSongEnhancement.currentVersion {
+            return nil
+        }
+        
+        return cachedEnhancement
+    }
     
-    /// Check if enhanced MusicKit data is available
+    // MARK: - Enhanced Data Access (CRITICAL FIX: Use cached data when available)
+    
+    /// Check if enhanced MusicKit data is available (either live or cached)
     var hasEnhancedData: Bool {
-        return musicKitSong != nil
+        return musicKitSong != nil || cachedEnhancement != nil
     }
     
-    /// Get enhanced genre information from MusicKit or fallback to MediaPlayer
+    /// Get enhanced genre information from MusicKit, cache, or fallback to MediaPlayer
     var enhancedGenre: String {
         // Try MusicKit first for richer genre data
         if let musicKitGenres = musicKitSong?.genreNames, !musicKitGenres.isEmpty {
             return musicKitGenres.joined(separator: ", ")
         }
         
+        // CRITICAL FIX: Try cached data
+        if let cachedGenre = cachedEnhancement?.enhancedGenre {
+            return cachedGenre
+        }
+        
         // Fallback to MediaPlayer
         return mediaItem.value(forProperty: MPMediaItemPropertyGenre) as? String ?? "Unknown"
     }
     
-    /// Get enhanced duration from MusicKit or fallback to MediaPlayer
+    /// Get enhanced duration from MusicKit, cache, or fallback to MediaPlayer
     var enhancedDuration: TimeInterval {
         // MusicKit duration is more accurate
         if let musicKitDuration = musicKitSong?.duration {
             return musicKitDuration
         }
         
+        // CRITICAL FIX: Try cached data
+        if let cachedDuration = cachedEnhancement?.enhancedDuration {
+            return cachedDuration
+        }
+        
         // Fallback to MediaPlayer
         return mediaItem.value(forProperty: MPMediaItemPropertyPlaybackDuration) as? TimeInterval ?? 0
     }
     
-    /// Get enhanced artist name from MusicKit or fallback to MediaPlayer
+    /// Get enhanced artist name from MusicKit, cache, or fallback to MediaPlayer
     var enhancedArtist: String {
         // MusicKit might have more accurate artist information
         if let musicKitArtist = musicKitSong?.artistName {
             return musicKitArtist
         }
         
+        // CRITICAL FIX: Try cached data
+        if let cachedArtist = cachedEnhancement?.enhancedArtist {
+            return cachedArtist
+        }
+        
         return artist
     }
     
-    /// Get enhanced album name from MusicKit or fallback to MediaPlayer
+    /// Get enhanced album name from MusicKit, cache, or fallback to MediaPlayer
     var enhancedAlbum: String {
         // MusicKit might have more accurate album information
         if let musicKitAlbum = musicKitSong?.albumTitle {
             return musicKitAlbum
         }
         
+        // CRITICAL FIX: Try cached data
+        if let cachedAlbum = cachedEnhancement?.enhancedAlbum {
+            return cachedAlbum
+        }
+        
         return album
     }
     
-    /// Get release date from MusicKit or MediaPlayer
+    /// Get release date from MusicKit, cache, or MediaPlayer
     var enhancedReleaseDate: Date? {
         // Try MusicKit first
         if let musicKitReleaseDate = musicKitSong?.releaseDate {
             return musicKitReleaseDate
         }
         
+        // CRITICAL FIX: Try cached data
+        if let cachedReleaseDate = cachedEnhancement?.enhancedReleaseDate {
+            return cachedReleaseDate
+        }
+        
         // Fallback to MediaPlayer
         return mediaItem.value(forProperty: MPMediaItemPropertyReleaseDate) as? Date
     }
     
-    /// Get composer information with MusicKit enhancement
+    /// Get composer information with MusicKit, cache, or MediaPlayer enhancement
     var enhancedComposer: String {
         // Try MusicKit composer information first
         if let musicKitComposer = musicKitSong?.composerName {
             return musicKitComposer
+        }
+        
+        // CRITICAL FIX: Try cached data
+        if let cachedComposer = cachedEnhancement?.enhancedComposer {
+            return cachedComposer
         }
         
         // Fallback to MediaPlayer
@@ -123,14 +181,22 @@ struct Song: Identifiable, Equatable, Hashable {
         if let musicKitTrackNumber = musicKitSong?.trackNumber {
             trackNumber = "\(musicKitTrackNumber)"
             
-            // Add total tracks if available
-            if let _ = musicKitSong?.albumTitle {
-                // MusicKit doesn't directly provide total tracks, so use MediaPlayer fallback
-                if let mpTrackCount = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int {
-                    trackNumber = "\(musicKitTrackNumber) of \(mpTrackCount)"
-                }
+            // Add total tracks if available from MediaPlayer
+            if let mpTrackCount = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int {
+                trackNumber = "\(musicKitTrackNumber) of \(mpTrackCount)"
             }
-        } else if let mpTrackNumber = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackNumber) as? Int {
+        }
+        // CRITICAL FIX: Try cached data
+        else if let cachedTrackNumber = cachedEnhancement?.enhancedTrackNumber {
+            trackNumber = "\(cachedTrackNumber)"
+            
+            // Add total tracks if available from MediaPlayer
+            if let mpTrackCount = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int {
+                trackNumber = "\(cachedTrackNumber) of \(mpTrackCount)"
+            }
+        }
+        // Fallback to MediaPlayer
+        else if let mpTrackNumber = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackNumber) as? Int {
             let totalTracks = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int
             if let total = totalTracks {
                 trackNumber = "\(mpTrackNumber) of \(total)"
@@ -139,8 +205,15 @@ struct Song: Identifiable, Equatable, Hashable {
             }
         }
         
-        // Disc number handling
-        if let mpDiscNumber = mediaItem.value(forProperty: MPMediaItemPropertyDiscNumber) as? Int {
+        // Disc number handling (try cached data first)
+        if let cachedDiscNumber = cachedEnhancement?.enhancedDiscNumber {
+            let totalDiscs = mediaItem.value(forProperty: MPMediaItemPropertyDiscCount) as? Int
+            if let total = totalDiscs {
+                discNumber = "\(cachedDiscNumber) of \(total)"
+            } else {
+                discNumber = "\(cachedDiscNumber)"
+            }
+        } else if let mpDiscNumber = mediaItem.value(forProperty: MPMediaItemPropertyDiscNumber) as? Int {
             let totalDiscs = mediaItem.value(forProperty: MPMediaItemPropertyDiscCount) as? Int
             if let total = totalDiscs {
                 discNumber = "\(mpDiscNumber) of \(total)"
@@ -152,9 +225,34 @@ struct Song: Identifiable, Equatable, Hashable {
         return (trackNumber: trackNumber, discNumber: discNumber)
     }
     
-    /// Check if song has explicit content (from MusicKit)
+    /// Check if song has explicit content (from MusicKit or cache)
     var isExplicit: Bool {
-        return musicKitSong?.contentRating == .explicit
+        if let explicit = musicKitSong?.contentRating {
+            return explicit == .explicit
+        }
+        
+        // CRITICAL FIX: Try cached data
+        if let cachedExplicit = cachedEnhancement?.isExplicit {
+            return cachedExplicit
+        }
+        
+        return false
+    }
+    
+    /// CRITICAL FIX: Enhanced artwork with cache support
+    var enhancedArtworkURL: URL? {
+        // Try MusicKit first
+        if let artwork = enhancedArtwork {
+            return artwork.url(width: 300, height: 300)
+        }
+        
+        // Try cached artwork URL
+        if let cachedArtworkURLString = cachedEnhancement?.artworkURL,
+           let cachedArtworkURL = URL(string: cachedArtworkURLString) {
+            return cachedArtworkURL
+        }
+        
+        return nil
     }
     
     // MARK: - Local Play Count Methods (Updated to use centralized UserDefaults keys)
@@ -215,8 +313,7 @@ struct Song: Identifiable, Equatable, Hashable {
     
     /// Check if this song has cached enhanced data
     func hasCachedEnhancedData() -> Bool {
-        let key = UserDefaultsKeys.enhancedSongKey(for: id)
-        return UserDefaults.standard.data(forKey: key) != nil
+        return cachedEnhancement != nil
     }
     
     /// Check if this song has cached artwork
@@ -243,6 +340,15 @@ struct Song: Identifiable, Equatable, Hashable {
         }
     }
     
+    /// CRITICAL FIX: Get cache status for debugging
+    func getCacheStatus() -> (hasEnhanced: Bool, hasArtwork: Bool, cacheAge: TimeInterval?) {
+        let hasEnhanced = hasCachedEnhancedData()
+        let hasArtwork = hasCachedArtwork()
+        let cacheAge = cachedEnhancement?.timestamp.timeIntervalSinceNow.magnitude
+        
+        return (hasEnhanced: hasEnhanced, hasArtwork: hasArtwork, cacheAge: cacheAge)
+    }
+    
     static func == (lhs: Song, rhs: Song) -> Bool {
         // Only compare by ID for equality
         lhs.id == rhs.id
@@ -258,4 +364,32 @@ extension MPMediaEntityPersistentID {
     var stringValue: String {
         String(format: "%llx", self)
     }
+}
+
+// MARK: - Cached Song Enhancement Model (moved here for Song access)
+
+/// Lightweight cached song enhancement data
+struct CachedSongEnhancement: Codable {
+    let songId: String
+    let timestamp: Date
+    let version: Int // For cache versioning
+    
+    // MusicKit data that we can cache
+    let musicKitSongId: String?
+    let enhancedGenre: String?
+    let enhancedDuration: TimeInterval?
+    let enhancedArtist: String?
+    let enhancedAlbum: String?
+    let enhancedReleaseDate: Date?
+    let enhancedComposer: String?
+    let enhancedTrackNumber: Int?
+    let enhancedDiscNumber: Int?
+    let isExplicit: Bool
+    let artworkURL: String? // Cache the URL for artwork
+    
+    // Validation
+    let originalTitle: String // To validate we're getting the right song
+    let originalArtist: String
+    
+    static let currentVersion = 1
 }

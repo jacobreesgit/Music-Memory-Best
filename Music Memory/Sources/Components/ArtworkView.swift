@@ -8,16 +8,22 @@ struct ArtworkView: View {
     let size: CGFloat
     let isCurrentlyPlaying: Bool
     let isActivelyPlaying: Bool
+    let songId: String? // CRITICAL FIX: Add song ID for cache lookup
+    
     @State private var image: UIImage?
     @State private var isLoading: Bool = true
     @State private var animationOffset: CGFloat = 0
     
-    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
+    // CRITICAL FIX: Access to artwork cache service
+    private let artworkPersistenceService = DIContainer.shared.artworkPersistenceService
+    
+    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false, songId: String? = nil) {
         self.artwork = artwork
         self.enhancedArtwork = enhancedArtwork
         self.size = size
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
+        self.songId = songId
     }
     
     // Convenience initializer for Song objects
@@ -27,6 +33,7 @@ struct ArtworkView: View {
         self.size = size
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
+        self.songId = song.id // CRITICAL FIX: Use song ID for caching
     }
     
     var body: some View {
@@ -111,22 +118,33 @@ struct ArtworkView: View {
     }
     
     @MainActor
-    private func loadArtworkAsync() async {
+    private func loadArtworkAsync() {
         isLoading = true
         defer { isLoading = false }
+        
+        // CRITICAL FIX: Try cached artwork first if we have a song ID
+        if let songId = songId,
+           let cachedImage = artworkPersistenceService.getCachedArtwork(for: songId) {
+            self.image = cachedImage
+            return
+        }
         
         // Determine the appropriate size with 2x resolution for crisp display
         let targetSize = CGSize(width: size * 2, height: size * 2)
         
-        // Try MusicKit artwork first (higher quality) - progressive enhancement
+        // Try MusicKit artwork (progressive enhancement)
         if let enhancedArtwork = enhancedArtwork {
             do {
-                // MusicKit Artwork uses url(width:height:) method
                 if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
                     let (data, _) = try await URLSession.shared.data(from: artworkURL)
                     if let artworkImage = UIImage(data: data) {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             self.image = artworkImage
+                        }
+                        
+                        // CRITICAL FIX: Cache the enhanced artwork
+                        if let songId = songId {
+                            artworkPersistenceService.cacheArtworkForSong(songId, artwork: artworkImage)
                         }
                         return
                     }
@@ -144,13 +162,16 @@ struct ArtworkView: View {
                 artwork.image(at: targetSize)
             }.value
             
-            // Show MediaPlayer artwork immediately if no enhanced artwork is loaded
+            // Show MediaPlayer artwork if no enhanced artwork is loaded
             if self.image == nil {
                 self.image = mediaPlayerImage
+                
+                // CRITICAL FIX: Cache MediaPlayer artwork too if we have song ID
+                if let songId = songId, let mediaPlayerImage = mediaPlayerImage {
+                    artworkPersistenceService.cacheArtworkForSong(songId, artwork: mediaPlayerImage)
+                }
             }
         }
-        
-        // If no artwork is available, image remains nil and default icon will show
     }
     
     private func startAnimation() {
@@ -167,22 +188,28 @@ struct ArtworkView: View {
     }
 }
 
-// MARK: - Artwork Detail View for Song Detail Screen
+// MARK: - Artwork Detail View for Song Detail Screen (Updated)
 
 struct ArtworkDetailView: View {
     let artwork: UIImage?
     let enhancedArtwork: Artwork?
     let isCurrentlyPlaying: Bool
     let isActivelyPlaying: Bool
+    let songId: String? // CRITICAL FIX: Add song ID for cache lookup
+    
     @State private var displayImage: UIImage?
     @State private var isLoading: Bool = true
     @State private var animationOffset: CGFloat = 0
     
-    init(artwork: UIImage?, enhancedArtwork: Artwork? = nil, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool) {
+    // CRITICAL FIX: Access to artwork cache service
+    private let artworkPersistenceService = DIContainer.shared.artworkPersistenceService
+    
+    init(artwork: UIImage?, enhancedArtwork: Artwork? = nil, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool, songId: String? = nil) {
         self.artwork = artwork
         self.enhancedArtwork = enhancedArtwork
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
+        self.songId = songId
     }
     
     // Convenience initializer for Song objects
@@ -191,6 +218,7 @@ struct ArtworkDetailView: View {
         self.enhancedArtwork = song.enhancedArtwork
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
+        self.songId = song.id // CRITICAL FIX: Use song ID for caching
     }
     
     var body: some View {
@@ -286,9 +314,16 @@ struct ArtworkDetailView: View {
     }
     
     @MainActor
-    private func loadDetailArtworkAsync() async {
+    private func loadDetailArtworkAsync() {
         isLoading = true
         defer { isLoading = false }
+        
+        // CRITICAL FIX: Try cached artwork first
+        if let songId = songId,
+           let cachedImage = artworkPersistenceService.getCachedArtwork(for: songId) {
+            self.displayImage = cachedImage
+            return
+        }
         
         // High resolution for detail view (600x600)
         let targetSize = CGSize(width: 600, height: 600)
@@ -296,12 +331,16 @@ struct ArtworkDetailView: View {
         // Try MusicKit artwork first (highest quality) - progressive enhancement
         if let enhancedArtwork = enhancedArtwork {
             do {
-                // MusicKit Artwork uses url(width:height:) method
                 if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
                     let (data, _) = try await URLSession.shared.data(from: artworkURL)
                     if let artworkImage = UIImage(data: data) {
                         withAnimation(.easeInOut(duration: 0.5)) {
                             self.displayImage = artworkImage
+                        }
+                        
+                        // CRITICAL FIX: Cache the high-quality artwork
+                        if let songId = songId {
+                            artworkPersistenceService.cacheArtworkForSong(songId, artwork: artworkImage)
                         }
                         return
                     }
@@ -317,10 +356,13 @@ struct ArtworkDetailView: View {
             // Show MediaPlayer artwork immediately if no enhanced artwork is loaded
             if displayImage == nil {
                 self.displayImage = artwork
+                
+                // CRITICAL FIX: Cache MediaPlayer artwork too
+                if let songId = songId {
+                    artworkPersistenceService.cacheArtworkForSong(songId, artwork: artwork)
+                }
             }
         }
-        
-        // If no artwork is available, displayImage remains nil and default icon will show
     }
     
     private func startAnimation() {
@@ -337,23 +379,30 @@ struct ArtworkDetailView: View {
     }
 }
 
-// MARK: - Now Playing Bar Artwork (90x90 for crisp display)
+// MARK: - Now Playing Bar Artwork (90x90 for crisp display) (Updated)
 
 struct NowPlayingArtworkView: View {
     let artwork: MPMediaItemArtwork?
     let enhancedArtwork: Artwork?
+    let songId: String? // CRITICAL FIX: Add song ID for cache lookup
+    
     @State private var image: UIImage?
     @State private var isLoading: Bool = true
     
-    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil) {
+    // CRITICAL FIX: Access to artwork cache service
+    private let artworkPersistenceService = DIContainer.shared.artworkPersistenceService
+    
+    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil, songId: String? = nil) {
         self.artwork = artwork
         self.enhancedArtwork = enhancedArtwork
+        self.songId = songId
     }
     
     // Convenience initializer for Song objects
     init(song: Song?) {
         self.artwork = song?.artwork
         self.enhancedArtwork = song?.enhancedArtwork
+        self.songId = song?.id // CRITICAL FIX: Use song ID for caching
     }
     
     var body: some View {
@@ -400,9 +449,16 @@ struct NowPlayingArtworkView: View {
     }
     
     @MainActor
-    private func loadNowPlayingArtworkAsync() async {
+    private func loadNowPlayingArtworkAsync() {
         isLoading = true
         defer { isLoading = false }
+        
+        // CRITICAL FIX: Try cached artwork first
+        if let songId = songId,
+           let cachedImage = artworkPersistenceService.getCachedArtwork(for: songId) {
+            self.image = cachedImage
+            return
+        }
         
         // Crisp size for now playing bar (90x90 for 45pt display)
         let targetSize = CGSize(width: 90, height: 90)
@@ -410,12 +466,16 @@ struct NowPlayingArtworkView: View {
         // Try MusicKit artwork first - progressive enhancement
         if let enhancedArtwork = enhancedArtwork {
             do {
-                // MusicKit Artwork uses url(width:height:) method
                 if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
                     let (data, _) = try await URLSession.shared.data(from: artworkURL)
                     if let artworkImage = UIImage(data: data) {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             self.image = artworkImage
+                        }
+                        
+                        // CRITICAL FIX: Cache the now playing artwork
+                        if let songId = songId {
+                            artworkPersistenceService.cacheArtworkForSong(songId, artwork: artworkImage)
                         }
                         return
                     }
@@ -435,6 +495,11 @@ struct NowPlayingArtworkView: View {
             // Show MediaPlayer artwork immediately if no enhanced artwork is loaded
             if self.image == nil {
                 self.image = mediaPlayerImage
+                
+                // CRITICAL FIX: Cache MediaPlayer artwork too
+                if let songId = songId, let mediaPlayerImage = mediaPlayerImage {
+                    artworkPersistenceService.cacheArtworkForSong(songId, artwork: mediaPlayerImage)
+                }
             }
         }
     }

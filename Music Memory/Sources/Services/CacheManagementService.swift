@@ -7,6 +7,8 @@ protocol CacheManagementServiceProtocol {
     func shouldPerformCleanup() -> Bool
     func getCacheHealthScore() -> Double
     func getCacheOptimizationRecommendations() -> [String]
+    func validateAllCaches() -> CacheValidationResult
+    func coordinatedCacheWarmup(for songs: [Song]) async
 }
 
 struct CacheStatistics {
@@ -20,6 +22,19 @@ struct CacheStatistics {
     let lastCleanupDate: Date?
     let oldestDataDate: Date?
     let newestDataDate: Date?
+    
+    // CRITICAL FIX: Add validation stats
+    let validCacheEntries: Int
+    let staleCacheEntries: Int
+    let corruptedCacheEntries: Int
+}
+
+struct CacheValidationResult {
+    let enhancedSongs: (valid: Int, stale: Int, corrupted: Int)
+    let artworkCache: (valid: Int, stale: Int, corrupted: Int)
+    let searchCache: (valid: Int, stale: Int, corrupted: Int)
+    let totalProblems: Int
+    let recommendations: [String]
 }
 
 class CacheManagementService: CacheManagementServiceProtocol {
@@ -28,10 +43,12 @@ class CacheManagementService: CacheManagementServiceProtocol {
     private let artworkPersistenceService: ArtworkPersistenceServiceProtocol
     private let enhancedSongCacheService: EnhancedSongCacheServiceProtocol
     private let musicLibraryService: MusicLibraryServiceProtocol
+    private let queue = DispatchQueue(label: "cache-management", qos: .utility)
     
-    // Cleanup intervals
+    // Cleanup intervals and thresholds
     private let periodicCleanupInterval: TimeInterval = 24 * 60 * 60 // 24 hours
-    private let emergencyCleanupThreshold: Int = 100 * 1024 * 1024 // 100MB
+    private let emergencyCleanupThreshold: Int = 200 * 1024 * 1024 // 200MB
+    private let maxUserDefaultsKeys = 5000 // Reasonable limit for UserDefaults
     
     init(
         logger: LoggerProtocol,
@@ -48,9 +65,17 @@ class CacheManagementService: CacheManagementServiceProtocol {
     }
     
     func performPeriodicCleanup() {
-        logger.log("Starting periodic cache cleanup", level: .info)
+        queue.async { [weak self] in
+            self?._performPeriodicCleanup()
+        }
+    }
+    
+    private func _performPeriodicCleanup() {
+        logger.log("Starting periodic cache cleanup with validation", level: .info)
         
-        // Clean up each cache type
+        let startTime = Date()
+        
+        // Clean up each cache type with validation
         rankHistoryService.cleanupOldSnapshots()
         artworkPersistenceService.cleanupOldArtwork()
         enhancedSongCacheService.cleanupOldEnhancedSongs()
@@ -62,70 +87,171 @@ class CacheManagementService: CacheManagementServiceProtocol {
             }
         }
         
+        // CRITICAL FIX: Validate cache consistency after cleanup
+        let validationResult = validateAllCaches()
+        if validationResult.totalProblems > 0 {
+            logger.log("Found \(validationResult.totalProblems) cache problems after cleanup", level: .warning)
+        }
+        
         // Update last cleanup timestamp
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: UserDefaultsKeys.cacheLastCleanupDate)
         
+        let cleanupDuration = Date().timeIntervalSince(startTime)
         let stats = getCacheStatistics()
-        logger.log("Periodic cache cleanup completed. Total cache size: \(stats.totalDataSize)", level: .info)
+        logger.log("Periodic cache cleanup completed in \(String(format: "%.2f", cleanupDuration))s. Total cache size: \(stats.totalDataSize)", level: .info)
     }
     
     func performFullCleanup() {
+        queue.async { [weak self] in
+            self?._performFullCleanup()
+        }
+    }
+    
+    private func _performFullCleanup() {
         logger.log("Starting full cache cleanup (emergency cleanup)", level: .warning)
         
-        // More aggressive cleanup for emergency situations
+        let startTime = Date()
         let userDefaults = UserDefaults.standard
         let allKeys = userDefaults.dictionaryRepresentation().keys
         
-        // Remove old artwork entries more aggressively
-        let artworkKeys = allKeys.filter { $0.hasPrefix("artwork_") }
-        var removedArtworkCount = 0
+        // CRITICAL FIX: Use age-based cleanup instead of arbitrary removal
         
-        // Remove older artwork entries first (keep only recent 25 instead of 100)
-        if artworkKeys.count > 25 {
-            // This is a simplified approach - in a real implementation,
-            // we'd sort by timestamp and remove oldest entries
-            let keysToRemove = artworkKeys.prefix(artworkKeys.count - 25)
-            for key in keysToRemove {
-                userDefaults.removeObject(forKey: key)
-                removedArtworkCount += 1
-            }
-        }
+        // Clean enhanced song cache more aggressively (keep only last 30 days)
+        cleanupEnhancedSongCacheAggressively(maxAge: 30 * 24 * 60 * 60)
         
-        // Remove old enhanced song cache entries
-        let enhancedSongKeys = allKeys.filter { $0.hasPrefix("enhancedSong_") }
-        var removedEnhancedSongCount = 0
+        // Clean artwork cache more aggressively (keep only last 7 days)
+        cleanupArtworkCacheAggressively(maxAge: 7 * 24 * 60 * 60)
         
-        if enhancedSongKeys.count > 500 {
-            let keysToRemove = enhancedSongKeys.prefix(enhancedSongKeys.count - 500)
-            for key in keysToRemove {
-                userDefaults.removeObject(forKey: key)
-                removedEnhancedSongCount += 1
-            }
-        }
+        // Clean search cache more aggressively (keep only last 7 days)
+        cleanupSearchCacheAggressively(maxAge: 7 * 24 * 60 * 60)
         
-        // Remove old MusicKit search cache entries
-        let musicKitSearchKeys = allKeys.filter { $0.hasPrefix("musicKitSearch_") }
-        var removedSearchCount = 0
+        // Clean up orphaned UserDefaults keys
+        cleanupOrphanedKeys()
         
-        if musicKitSearchKeys.count > 250 {
-            let keysToRemove = musicKitSearchKeys.prefix(musicKitSearchKeys.count - 250)
-            for key in keysToRemove {
-                userDefaults.removeObject(forKey: key)
-                removedSearchCount += 1
-            }
-        }
-        
-        // Clean up metadata for removed entries
-        artworkPersistenceService.cleanupOldArtwork()
-        enhancedSongCacheService.cleanupOldEnhancedSongs()
+        // Validate after aggressive cleanup
+        let validationResult = validateAllCaches()
         
         // Update last cleanup timestamp
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: UserDefaultsKeys.cacheLastCleanupDate)
         
-        logger.log("Full cache cleanup completed. Removed: \(removedArtworkCount) artwork, \(removedEnhancedSongCount) enhanced songs, \(removedSearchCount) search entries", level: .warning)
+        let cleanupDuration = Date().timeIntervalSince(startTime)
+        logger.log("Full cache cleanup completed in \(String(format: "%.2f", cleanupDuration))s. Problems found: \(validationResult.totalProblems)", level: .warning)
+    }
+    
+    // CRITICAL FIX: Age-based cleanup methods
+    
+    private func cleanupEnhancedSongCacheAggressively(maxAge: TimeInterval) {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let enhancedSongKeys = allKeys.filter { $0.hasPrefix("enhancedSong_") }
+        
+        var removedCount = 0
+        
+        for key in enhancedSongKeys {
+            guard let data = userDefaults.data(forKey: key),
+                  let cachedData = try? JSONDecoder().decode(CachedSongEnhancement.self, from: data) else {
+                // Remove corrupted entries
+                userDefaults.removeObject(forKey: key)
+                removedCount += 1
+                continue
+            }
+            
+            // Remove if too old
+            if Date().timeIntervalSince(cachedData.timestamp) > maxAge {
+                userDefaults.removeObject(forKey: key)
+                removedCount += 1
+            }
+        }
+        
+        logger.log("Aggressive enhanced song cleanup: removed \(removedCount) entries", level: .info)
+    }
+    
+    private func cleanupArtworkCacheAggressively(maxAge: TimeInterval) {
+        // This would need to be implemented in ArtworkPersistenceService
+        // For now, use the existing cleanup
+        artworkPersistenceService.cleanupOldArtwork()
+    }
+    
+    private func cleanupSearchCacheAggressively(maxAge: TimeInterval) {
+        if let musicLibraryService = musicLibraryService as? MusicLibraryService {
+            Task {
+                await musicLibraryService.cleanupOldMusicKitSearchCache()
+            }
+        }
+    }
+    
+    private func cleanupOrphanedKeys() {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        var orphanedKeys: [String] = []
+        
+        // Find keys that match our patterns but don't have corresponding metadata
+        for key in allKeys {
+            let isAppKey = UserDefaultsKeys.allKeyPrefixes.contains { key.hasPrefix($0) }
+            
+            if isAppKey {
+                // Check if this key has valid metadata or is a metadata key itself
+                if !isValidAppKey(key) {
+                    orphanedKeys.append(key)
+                }
+            }
+        }
+        
+        // Remove orphaned keys
+        for key in orphanedKeys {
+            userDefaults.removeObject(forKey: key)
+        }
+        
+        if !orphanedKeys.isEmpty {
+            logger.log("Removed \(orphanedKeys.count) orphaned cache keys", level: .info)
+        }
+    }
+    
+    private func isValidAppKey(_ key: String) -> Bool {
+        // This is a simplified validation - in practice, you'd want more sophisticated validation
+        
+        // Metadata keys are always valid
+        if key == UserDefaultsKeys.enhancedSongMetadata ||
+           key == UserDefaultsKeys.musicKitSearchMetadata ||
+           key == UserDefaultsKeys.artworkMetadata ||
+           key == UserDefaultsKeys.savedArtworkSongId ||
+           key == UserDefaultsKeys.savedArtworkTimestamp ||
+           key == UserDefaultsKeys.cacheLastCleanupDate {
+            return true
+        }
+        
+        // For data keys, check if they have reasonable format
+        if key.hasPrefix("enhancedSong_") || key.hasPrefix("artwork_") || key.hasPrefix("musicKitSearch_") {
+            // Extract ID part and validate it's reasonable
+            let components = key.components(separatedBy: "_")
+            if components.count >= 2 && !components[1].isEmpty {
+                return true
+            }
+        }
+        
+        if key.hasPrefix("localPlayCount_") || key.hasPrefix("baselinePlayCount_") || key.hasPrefix("rankSnapshots_") {
+            let components = key.components(separatedBy: "_")
+            if components.count >= 2 && !components[1].isEmpty {
+                return true
+            }
+        }
+        
+        return false
     }
     
     func getCacheStatistics() -> CacheStatistics {
+        return queue.sync { [weak self] in
+            return self?._getCacheStatistics() ?? CacheStatistics(
+                totalUserDefaultsKeys: 0, totalDataSize: "0 KB",
+                playCountEntries: 0, rankHistoryEntries: 0, enhancedSongEntries: 0,
+                artworkEntries: 0, musicKitSearchEntries: 0,
+                lastCleanupDate: nil, oldestDataDate: nil, newestDataDate: nil,
+                validCacheEntries: 0, staleCacheEntries: 0, corruptedCacheEntries: 0
+            )
+        }
+    }
+    
+    private func _getCacheStatistics() -> CacheStatistics {
         let userDefaults = UserDefaults.standard
         let allKeys = userDefaults.dictionaryRepresentation().keys
         
@@ -136,7 +262,7 @@ class CacheManagementService: CacheManagementServiceProtocol {
         let artworkEntries = allKeys.filter { $0.hasPrefix("artwork_") }.count
         let musicKitSearchEntries = allKeys.filter { $0.hasPrefix("musicKitSearch_") }.count
         
-        // Calculate total data size
+        // Calculate total data size more accurately
         var totalSize: Int64 = 0
         let relevantKeys = allKeys.filter { key in
             UserDefaultsKeys.allKeyPrefixes.contains { key.hasPrefix($0) } ||
@@ -160,9 +286,15 @@ class CacheManagementService: CacheManagementServiceProtocol {
         let lastCleanupTimestamp = userDefaults.double(forKey: UserDefaultsKeys.cacheLastCleanupDate)
         let lastCleanupDate = lastCleanupTimestamp > 0 ? Date(timeIntervalSince1970: lastCleanupTimestamp) : nil
         
-        // Get oldest and newest data dates (simplified approach)
+        // Get oldest and newest data dates
         let oldestDataDate = getOldestDataDate()
         let newestDataDate = getNewestDataDate()
+        
+        // CRITICAL FIX: Get validation stats
+        let validationResult = validateAllCaches()
+        let validEntries = validationResult.enhancedSongs.valid + validationResult.artworkCache.valid + validationResult.searchCache.valid
+        let staleEntries = validationResult.enhancedSongs.stale + validationResult.artworkCache.stale + validationResult.searchCache.stale
+        let corruptedEntries = validationResult.enhancedSongs.corrupted + validationResult.artworkCache.corrupted + validationResult.searchCache.corrupted
         
         return CacheStatistics(
             totalUserDefaultsKeys: relevantKeys.count,
@@ -174,7 +306,10 @@ class CacheManagementService: CacheManagementServiceProtocol {
             musicKitSearchEntries: musicKitSearchEntries,
             lastCleanupDate: lastCleanupDate,
             oldestDataDate: oldestDataDate,
-            newestDataDate: newestDataDate
+            newestDataDate: newestDataDate,
+            validCacheEntries: validEntries,
+            staleCacheEntries: staleEntries,
+            corruptedCacheEntries: corruptedEntries
         )
     }
     
@@ -193,88 +328,196 @@ class CacheManagementService: CacheManagementServiceProtocol {
             return true
         }
         
-        // Check if we're approaching emergency cleanup thresholds
+        // CRITICAL FIX: More intelligent emergency checks
         let stats = getCacheStatistics()
         
-        // Check total number of keys (rough emergency check)
-        if stats.totalUserDefaultsKeys > 5000 {
+        // Check total number of keys
+        if stats.totalUserDefaultsKeys > maxUserDefaultsKeys {
             logger.log("Emergency cleanup needed: too many UserDefaults keys (\(stats.totalUserDefaultsKeys))", level: .warning)
             return true
         }
         
-        // Check if we have excessive artwork entries
-        if stats.artworkEntries > 200 {
-            logger.log("Emergency cleanup needed: too many artwork entries (\(stats.artworkEntries))", level: .warning)
-            return true
+        // Check cache corruption level
+        let totalCacheEntries = stats.validCacheEntries + stats.staleCacheEntries + stats.corruptedCacheEntries
+        if totalCacheEntries > 0 {
+            let corruptionRate = Double(stats.corruptedCacheEntries) / Double(totalCacheEntries)
+            if corruptionRate > 0.1 { // More than 10% corrupted
+                logger.log("Emergency cleanup needed: high cache corruption rate (\(String(format: "%.1f", corruptionRate * 100))%)", level: .warning)
+                return true
+            }
         }
         
         return false
     }
     
+    // CRITICAL FIX: Comprehensive cache validation
+    func validateAllCaches() -> CacheValidationResult {
+        return queue.sync { [weak self] in
+            return self?._validateAllCaches() ?? CacheValidationResult(
+                enhancedSongs: (0, 0, 0),
+                artworkCache: (0, 0, 0),
+                searchCache: (0, 0, 0),
+                totalProblems: 0,
+                recommendations: ["Cache validation unavailable"]
+            )
+        }
+    }
+    
+    private func _validateAllCaches() -> CacheValidationResult {
+        // Validate enhanced song cache
+        let enhancedSongValidation = enhancedSongCacheService.getCacheValidationInfo()
+        
+        // Validate artwork cache (simplified - would need method in ArtworkPersistenceService)
+        let artworkValidation = validateArtworkCache()
+        
+        // Validate search cache (simplified - would need method in MusicLibraryService)
+        let searchValidation = validateSearchCache()
+        
+        let totalProblems = enhancedSongValidation.stale + enhancedSongValidation.corrupted +
+                           artworkValidation.stale + artworkValidation.corrupted +
+                           searchValidation.stale + searchValidation.corrupted
+        
+        var recommendations: [String] = []
+        
+        if enhancedSongValidation.corrupted > 0 {
+            recommendations.append("Remove \(enhancedSongValidation.corrupted) corrupted enhanced song entries")
+        }
+        
+        if enhancedSongValidation.stale > 0 {
+            recommendations.append("Refresh \(enhancedSongValidation.stale) stale enhanced song entries")
+        }
+        
+        if artworkValidation.corrupted > 0 {
+            recommendations.append("Remove \(artworkValidation.corrupted) corrupted artwork entries")
+        }
+        
+        if searchValidation.stale > 0 {
+            recommendations.append("Clear \(searchValidation.stale) stale search cache entries")
+        }
+        
+        if totalProblems == 0 {
+            recommendations.append("All caches are healthy")
+        }
+        
+        return CacheValidationResult(
+            enhancedSongs: enhancedSongValidation,
+            artworkCache: artworkValidation,
+            searchCache: searchValidation,
+            totalProblems: totalProblems,
+            recommendations: recommendations
+        )
+    }
+    
+    private func validateArtworkCache() -> (valid: Int, stale: Int, corrupted: Int) {
+        // Simplified validation - in practice, this would be in ArtworkPersistenceService
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let artworkKeys = allKeys.filter { $0.hasPrefix("artwork_") }
+        
+        var valid = 0
+        var stale = 0
+        var corrupted = 0
+        
+        for key in artworkKeys {
+            if let data = userDefaults.data(forKey: key), !data.isEmpty {
+                // Could check if it's valid image data
+                valid += 1
+            } else {
+                corrupted += 1
+            }
+        }
+        
+        return (valid: valid, stale: stale, corrupted: corrupted)
+    }
+    
+    private func validateSearchCache() -> (valid: Int, stale: Int, corrupted: Int) {
+        // Simplified validation - in practice, this would be in MusicLibraryService
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let searchKeys = allKeys.filter { $0.hasPrefix("musicKitSearch_") }
+        
+        var valid = 0
+        var stale = 0
+        var corrupted = 0
+        
+        for key in searchKeys {
+            guard let data = userDefaults.data(forKey: key) else {
+                corrupted += 1
+                continue
+            }
+            
+            guard let cachedResult = try? JSONDecoder().decode(CachedMusicKitResult.self, from: data) else {
+                corrupted += 1
+                continue
+            }
+            
+            // Check if stale (14 days)
+            if Date().timeIntervalSince(cachedResult.timestamp) > 14 * 24 * 60 * 60 {
+                stale += 1
+            } else {
+                valid += 1
+            }
+        }
+        
+        return (valid: valid, stale: stale, corrupted: corrupted)
+    }
+    
+    // CRITICAL FIX: Coordinated cache warming
+    func coordinatedCacheWarmup(for songs: [Song]) async {
+        logger.log("Starting coordinated cache warmup for \(songs.count) songs", level: .info)
+        
+        // Warm up caches in priority order
+        for song in songs.prefix(50) { // Warm up top 50 songs
+            // Check if already cached
+            if song.hasCachedEnhancedData() {
+                continue
+            }
+            
+            // Try to enhance and cache
+            if let enhancedSong = await musicLibraryService.enhanceSongWithMusicKit(song) {
+                // This will automatically cache the enhanced song and artwork
+                logger.log("Warmed cache for '\(song.title)'", level: .debug)
+            }
+            
+            // Small delay to avoid overwhelming the system
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        }
+        
+        logger.log("Completed coordinated cache warmup", level: .info)
+    }
+    
     // MARK: - Private Helper Methods
     
     private func getOldestDataDate() -> Date? {
-        // This is a simplified implementation
-        // In a real app, we'd check timestamps in metadata for each cache type
         return rankHistoryService.getOldestSnapshotDate()
     }
     
     private func getNewestDataDate() -> Date? {
-        // This is a simplified implementation
-        // In a real app, we'd check timestamps in metadata for each cache type
         return rankHistoryService.getNewestSnapshotDate()
     }
-    
-    // MARK: - Emergency Cleanup Methods
-    
-    func performEmergencyCleanupIfNeeded() {
-        let stats = getCacheStatistics()
-        
-        // Emergency thresholds
-        if stats.totalUserDefaultsKeys > 10000 || stats.artworkEntries > 500 || stats.enhancedSongEntries > 2000 {
-            logger.log("Performing emergency cleanup due to excessive cache usage", level: .error)
-            performFullCleanup()
-        }
-    }
-    
-    func estimateUserDefaultsSize() -> Int64 {
-        // Estimate the total UserDefaults size for our app
-        let userDefaults = UserDefaults.standard
-        let allKeys = userDefaults.dictionaryRepresentation().keys
-        
-        var totalSize: Int64 = 0
-        
-        for key in allKeys {
-            if UserDefaultsKeys.allKeyPrefixes.contains(where: { key.hasPrefix($0) }) ||
-               UserDefaultsKeys.allKeyPrefixes.contains(key) {
-                
-                if let data = userDefaults.data(forKey: key) {
-                    totalSize += Int64(data.count)
-                } else if userDefaults.object(forKey: key) != nil {
-                    totalSize += 50 // Conservative estimate
-                }
-            }
-        }
-        
-        return totalSize
-    }
-    
-    // MARK: - Protocol Required Methods
     
     /// Get a health score for the cache system (0.0 = unhealthy, 1.0 = perfect health)
     func getCacheHealthScore() -> Double {
         let stats = getCacheStatistics()
+        let validationResult = validateAllCaches()
         
         var healthScore: Double = 1.0
         
         // Penalty for too many keys
-        if stats.totalUserDefaultsKeys > 1000 {
-            healthScore -= 0.2
+        if stats.totalUserDefaultsKeys > maxUserDefaultsKeys {
+            healthScore -= 0.3
+        } else if stats.totalUserDefaultsKeys > maxUserDefaultsKeys * 0.8 {
+            healthScore -= 0.1
         }
         
-        // Penalty for excessive artwork cache
-        if stats.artworkEntries > 100 {
-            healthScore -= 0.3
+        // Penalty for cache corruption
+        let totalCacheEntries = stats.validCacheEntries + stats.staleCacheEntries + stats.corruptedCacheEntries
+        if totalCacheEntries > 0 {
+            let corruptionRate = Double(stats.corruptedCacheEntries) / Double(totalCacheEntries)
+            healthScore -= corruptionRate * 0.5 // Up to 50% penalty for corruption
+            
+            let staleRate = Double(stats.staleCacheEntries) / Double(totalCacheEntries)
+            healthScore -= staleRate * 0.2 // Up to 20% penalty for stale data
         }
         
         // Penalty for no recent cleanup
@@ -282,9 +525,11 @@ class CacheManagementService: CacheManagementServiceProtocol {
             let daysSinceCleanup = Date().timeIntervalSince(lastCleanup) / (24 * 60 * 60)
             if daysSinceCleanup > 7 {
                 healthScore -= 0.2
+            } else if daysSinceCleanup > 3 {
+                healthScore -= 0.1
             }
         } else {
-            healthScore -= 0.4 // Never cleaned up
+            healthScore -= 0.3 // Never cleaned up
         }
         
         return max(0.0, healthScore)
@@ -293,27 +538,32 @@ class CacheManagementService: CacheManagementServiceProtocol {
     /// Get recommendations for cache optimization
     func getCacheOptimizationRecommendations() -> [String] {
         let stats = getCacheStatistics()
+        let validationResult = validateAllCaches()
         var recommendations: [String] = []
         
-        if stats.artworkEntries > 100 {
-            recommendations.append("Consider clearing some artwork cache to free up space")
+        if stats.corruptedCacheEntries > 0 {
+            recommendations.append("Repair \(stats.corruptedCacheEntries) corrupted cache entries")
         }
         
-        if stats.enhancedSongEntries > 1000 {
-            recommendations.append("Enhanced song cache is large - cleanup recommended")
+        if stats.staleCacheEntries > 50 {
+            recommendations.append("Refresh \(stats.staleCacheEntries) stale cache entries")
         }
         
-        if stats.lastCleanupDate == nil {
-            recommendations.append("Perform initial cache cleanup")
-        } else if let lastCleanup = stats.lastCleanupDate {
+        if stats.totalUserDefaultsKeys > maxUserDefaultsKeys {
+            recommendations.append("Reduce UserDefaults usage - \(stats.totalUserDefaultsKeys) keys exceed recommended limit")
+        }
+        
+        if let lastCleanup = stats.lastCleanupDate {
             let daysSinceCleanup = Date().timeIntervalSince(lastCleanup) / (24 * 60 * 60)
             if daysSinceCleanup > 7 {
-                recommendations.append("Cache cleanup is overdue")
+                recommendations.append("Cache cleanup is overdue by \(Int(daysSinceCleanup - 1)) days")
             }
+        } else {
+            recommendations.append("Perform initial cache cleanup")
         }
         
         if recommendations.isEmpty {
-            recommendations.append("Cache is healthy and optimized")
+            recommendations.append("Cache system is optimized and healthy")
         }
         
         return recommendations

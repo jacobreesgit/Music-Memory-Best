@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @State private var showingDetailedCacheInfo = false
     @State private var showingCacheRecommendations = false
+    @State private var showingCacheIntegrityReport = false
     
     var body: some View {
         NavigationView {
@@ -25,13 +26,29 @@ struct SettingsView: View {
                     
                     // Settings Content
                     VStack(spacing: AppSpacing.large) {
-                        // Local Data Management Card
+                        // CRITICAL FIX: Enhanced Cache Health Card
                         AppCard {
                             VStack(spacing: AppSpacing.medium) {
-                                // Card Header
+                                // Card Header with Health Indicator
                                 HStack {
                                     VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                                        HeadlineText(text: "Local Data Management")
+                                        HStack {
+                                            HeadlineText(text: "Cache System")
+                                            
+                                            Spacer()
+                                            
+                                            // Health indicator
+                                            HStack(spacing: AppSpacing.tiny) {
+                                                Circle()
+                                                    .fill(viewModel.cacheHealthColor)
+                                                    .frame(width: 8, height: 8)
+                                                
+                                                Text(viewModel.cacheHealthSummary)
+                                                    .font(AppFonts.caption)
+                                                    .foregroundColor(viewModel.cacheHealthColor)
+                                            }
+                                        }
+                                        
                                         CaptionText(text: "Total Storage: \(viewModel.localDataSize)")
                                     }
                                     
@@ -40,6 +57,33 @@ struct SettingsView: View {
                                     Image(systemName: "internaldrive")
                                         .font(.title2)
                                         .foregroundColor(AppColors.primary)
+                                }
+                                
+                                // CRITICAL FIX: Cache warning if there are problems
+                                if viewModel.shouldShowCacheWarning {
+                                    VStack(alignment: .leading, spacing: AppSpacing.small) {
+                                        Divider()
+                                        
+                                        HStack {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundColor(AppColors.warning)
+                                            
+                                            VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                                                Text("Cache Issues Detected")
+                                                    .font(AppFonts.subheadline)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(AppColors.warning)
+                                                
+                                                if let report = viewModel.getCacheIntegrityReport() {
+                                                    Text(report.problemSummary)
+                                                        .font(AppFonts.caption)
+                                                        .foregroundColor(AppColors.secondaryText)
+                                                }
+                                            }
+                                            
+                                            Spacer()
+                                        }
+                                    }
                                 }
                                 
                                 Divider()
@@ -69,27 +113,60 @@ struct SettingsView: View {
                                         )
                                     }
                                     
-                                    // Cache Details and Actions
-                                    HStack(spacing: AppSpacing.small) {
-                                        Button(action: {
-                                            showingDetailedCacheInfo = true
-                                        }) {
-                                            HStack(spacing: AppSpacing.tiny) {
-                                                Image(systemName: "info.circle")
-                                                Text("Cache Details")
+                                    // CRITICAL FIX: Enhanced Cache Actions
+                                    VStack(spacing: AppSpacing.small) {
+                                        // Cache management buttons
+                                        HStack(spacing: AppSpacing.small) {
+                                            Button(action: {
+                                                showingDetailedCacheInfo = true
+                                            }) {
+                                                HStack(spacing: AppSpacing.tiny) {
+                                                    Image(systemName: "info.circle")
+                                                    Text("Details")
+                                                }
                                             }
+                                            .secondaryStyle()
+                                            
+                                            Button(action: {
+                                                showingCacheIntegrityReport = true
+                                            }) {
+                                                HStack(spacing: AppSpacing.tiny) {
+                                                    Image(systemName: "checkmark.shield")
+                                                    Text("Health")
+                                                }
+                                            }
+                                            .secondaryStyle()
+                                            
+                                            Button(action: {
+                                                showingCacheRecommendations = true
+                                            }) {
+                                                HStack(spacing: AppSpacing.tiny) {
+                                                    Image(systemName: "lightbulb")
+                                                    Text("Optimize")
+                                                }
+                                            }
+                                            .secondaryStyle()
                                         }
-                                        .secondaryStyle()
                                         
+                                        // Refresh cache validation button
                                         Button(action: {
-                                            showingCacheRecommendations = true
+                                            AppHaptics.lightImpact()
+                                            viewModel.refreshCacheValidation()
                                         }) {
-                                            HStack(spacing: AppSpacing.tiny) {
-                                                Image(systemName: "lightbulb")
-                                                Text("Optimize")
+                                            HStack(spacing: AppSpacing.small) {
+                                                if viewModel.isValidatingCache {
+                                                    ProgressView()
+                                                        .scaleEffect(0.8)
+                                                        .tint(AppColors.primary)
+                                                } else {
+                                                    Image(systemName: "arrow.clockwise")
+                                                }
+                                                
+                                                Text(viewModel.isValidatingCache ? "Validating..." : "Refresh Cache Status")
                                             }
                                         }
                                         .secondaryStyle()
+                                        .disabled(viewModel.isValidatingCache)
                                     }
                                     
                                     // Clear Data Button
@@ -146,43 +223,51 @@ struct SettingsView: View {
             .sheet(isPresented: $showingCacheRecommendations) {
                 CacheRecommendationsView(viewModel: viewModel)
             }
+            .sheet(isPresented: $showingCacheIntegrityReport) {
+                CacheIntegrityReportView(viewModel: viewModel)
+            }
             .onAppear {
-                // Recalculate data size when view appears
+                // Recalculate data size and validate cache when view appears
                 viewModel.calculateDataSize()
+                viewModel.validateCacheIntegrity()
             }
         }
     }
 }
 
-// MARK: - Cache Detail View
+// MARK: - Cache Detail View (Updated)
 
 struct CacheDetailView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
-    @State private var cacheInfo: CacheInfo?
+    @State private var cacheBreakdown: CacheBreakdown?
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: AppSpacing.medium) {
-                    if let cacheInfo = cacheInfo {
+                    if let breakdown = cacheBreakdown {
                         // Total Size Header
                         AppCard {
                             VStack(spacing: AppSpacing.small) {
                                 HeadlineText(text: "Total Cache Size")
-                                Text(cacheInfo.totalSize)
+                                Text(breakdown.totalSize)
                                     .font(.system(size: AppFontSize.extraLarge, weight: .bold))
                                     .foregroundColor(AppColors.primary)
                             }
                         }
                         
-                        // Breakdown by Type
+                        // Enhanced Breakdown by Type with Entry Counts
                         AppCard {
                             VStack(alignment: .leading, spacing: AppSpacing.medium) {
                                 HeadlineText(text: "Storage Breakdown")
                                 
-                                ForEach(cacheInfo.breakdown, id: \.name) { item in
-                                    CacheBreakdownRow(name: item.name, size: item.size)
+                                ForEach(breakdown.breakdown, id: \.name) { item in
+                                    CacheBreakdownRow(
+                                        name: item.name,
+                                        size: item.size,
+                                        entries: item.entries
+                                    )
                                 }
                             }
                         }
@@ -253,23 +338,183 @@ struct CacheDetailView: View {
                 }
             }
             .onAppear {
-                loadCacheInfo()
+                loadCacheBreakdown()
             }
         }
     }
     
-    private func loadCacheInfo() {
+    private func loadCacheBreakdown() {
         Task {
-            let info = viewModel.getDetailedCacheInfo()
+            let breakdown = await Task.detached {
+                return viewModel.getDetailedCacheInfo()
+            }.value
             
             await MainActor.run {
-                self.cacheInfo = info
+                self.cacheBreakdown = breakdown
             }
         }
     }
 }
 
-// MARK: - Cache Recommendations View
+// CRITICAL FIX: Cache Integrity Report View
+struct CacheIntegrityReportView: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    @Environment(\.dismiss) var dismiss
+    @State private var integrityReport: CacheIntegrityReport?
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: AppSpacing.medium) {
+                    if let report = integrityReport {
+                        // Health Score Header
+                        AppCard {
+                            VStack(spacing: AppSpacing.small) {
+                                HStack {
+                                    Circle()
+                                        .fill(healthColor(for: report.healthScore))
+                                        .frame(width: 16, height: 16)
+                                    
+                                    HeadlineText(text: "Cache Integrity")
+                                    
+                                    Spacer()
+                                    
+                                    Text(String(format: "%.1f%%", report.healthScore * 100))
+                                        .font(AppFonts.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(healthColor(for: report.healthScore))
+                                }
+                                
+                                Text(report.problemSummary)
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.secondaryText)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        
+                        // Integrity Details
+                        AppCard {
+                            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                                HeadlineText(text: "Cache Validation Results")
+                                
+                                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                                    IntegrityRow(label: "Total Entries", value: "\(report.totalEntries)")
+                                    IntegrityRow(label: "Valid Entries", value: "\(report.validEntries)", color: AppColors.success)
+                                    
+                                    if report.staleEntries > 0 {
+                                        IntegrityRow(label: "Stale Entries", value: "\(report.staleEntries)", color: AppColors.warning)
+                                    }
+                                    
+                                    if report.corruptedEntries > 0 {
+                                        IntegrityRow(label: "Corrupted Entries", value: "\(report.corruptedEntries)", color: AppColors.destructive)
+                                    }
+                                    
+                                    if report.orphanedKeys > 0 {
+                                        IntegrityRow(label: "Orphaned Keys", value: "\(report.orphanedKeys)", color: AppColors.warning)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Detailed Breakdown
+                        AppCard {
+                            VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                                HeadlineText(text: "Detailed Breakdown")
+                                
+                                VStack(alignment: .leading, spacing: AppSpacing.small) {
+                                    CacheTypeIntegrityRow(
+                                        title: "Enhanced Songs",
+                                        integrity: report.enhancedSongIntegrity
+                                    )
+                                    
+                                    CacheTypeIntegrityRow(
+                                        title: "Artwork Cache",
+                                        integrity: report.artworkIntegrity
+                                    )
+                                    
+                                    CacheTypeIntegrityRow(
+                                        title: "Search Cache",
+                                        integrity: report.searchIntegrity
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Recommendations
+                        if !report.recommendations.isEmpty {
+                            AppCard {
+                                VStack(alignment: .leading, spacing: AppSpacing.medium) {
+                                    HeadlineText(text: "Recommendations")
+                                    
+                                    VStack(alignment: .leading, spacing: AppSpacing.small) {
+                                        ForEach(report.recommendations, id: \.self) { recommendation in
+                                            HStack(alignment: .top) {
+                                                Image(systemName: report.hasProblems ? "exclamationmark.triangle" : "checkmark.circle")
+                                                    .foregroundColor(report.hasProblems ? AppColors.warning : AppColors.success)
+                                                    .font(.caption)
+                                                    .padding(.top, 2)
+                                                
+                                                Text(recommendation)
+                                                    .font(AppFonts.body)
+                                                    .foregroundColor(AppColors.primaryText)
+                                                    .fixedSize(horizontal: false, vertical: true)
+                                                
+                                                Spacer()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Loading State
+                        AppCard {
+                            VStack(spacing: AppSpacing.medium) {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                    .tint(AppColors.primary)
+                                
+                                Text("Validating cache integrity...")
+                                    .font(AppFonts.body)
+                                    .foregroundColor(AppColors.secondaryText)
+                            }
+                            .padding(AppSpacing.large)
+                        }
+                    }
+                }
+                .padding(AppSpacing.medium)
+            }
+            .navigationTitle("Cache Integrity")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                loadIntegrityReport()
+            }
+        }
+    }
+    
+    private func healthColor(for score: Double) -> Color {
+        if score >= 0.8 {
+            return AppColors.success
+        } else if score >= 0.5 {
+            return AppColors.warning
+        } else {
+            return AppColors.destructive
+        }
+    }
+    
+    private func loadIntegrityReport() {
+        integrityReport = viewModel.getCacheIntegrityReport()
+    }
+}
+
+// MARK: - Cache Recommendations View (Updated)
 
 struct CacheRecommendationsView: View {
     @ObservedObject var viewModel: SettingsViewModel
@@ -348,6 +593,7 @@ struct CacheRecommendationsView: View {
                                     Button(action: {
                                         // Trigger cache refresh
                                         viewModel.calculateDataSize()
+                                        viewModel.refreshCacheValidation()
                                         loadRecommendations()
                                     }) {
                                         HStack {
@@ -386,8 +632,8 @@ struct CacheRecommendationsView: View {
             // Simulate analysis time
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             
-            // Get cache management service recommendations
-            let recs = DIContainer.shared.cacheManagementService.getCacheOptimizationRecommendations()
+            // Get recommendations from cache integrity report
+            let recs = viewModel.getCacheIntegrityReport()?.recommendations ?? []
             
             await MainActor.run {
                 self.recommendations = recs
@@ -397,17 +643,24 @@ struct CacheRecommendationsView: View {
     }
 }
 
-// MARK: - Supporting Views
+// MARK: - Supporting Views (Updated)
 
 struct CacheBreakdownRow: View {
     let name: String
     let size: String
+    let entries: Int
     
     var body: some View {
         HStack {
-            Text(name)
-                .font(AppFonts.body)
-                .foregroundColor(AppColors.primaryText)
+            VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+                Text(name)
+                    .font(AppFonts.body)
+                    .foregroundColor(AppColors.primaryText)
+                
+                Text("\(entries) entries")
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.secondaryText)
+            }
             
             Spacer()
             
@@ -415,6 +668,63 @@ struct CacheBreakdownRow: View {
                 .font(AppFonts.body)
                 .fontWeight(.medium)
                 .foregroundColor(AppColors.secondaryText)
+        }
+    }
+}
+
+struct IntegrityRow: View {
+    let label: String
+    let value: String
+    var color: Color = AppColors.primaryText
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(AppFonts.body)
+                .foregroundColor(AppColors.secondaryText)
+            
+            Spacer()
+            
+            Text(value)
+                .font(AppFonts.body)
+                .fontWeight(.medium)
+                .foregroundColor(color)
+        }
+    }
+}
+
+struct CacheTypeIntegrityRow: View {
+    let title: String
+    let integrity: (valid: Int, stale: Int, corrupted: Int)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tiny) {
+            Text(title)
+                .font(AppFonts.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(AppColors.primaryText)
+            
+            HStack(spacing: AppSpacing.medium) {
+                if integrity.valid > 0 {
+                    Label("\(integrity.valid)", systemImage: "checkmark.circle.fill")
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.success)
+                }
+                
+                if integrity.stale > 0 {
+                    Label("\(integrity.stale)", systemImage: "clock.fill")
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.warning)
+                }
+                
+                if integrity.corrupted > 0 {
+                    Label("\(integrity.corrupted)", systemImage: "xmark.circle.fill")
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.destructive)
+                }
+                
+                Spacer()
+            }
         }
     }
 }

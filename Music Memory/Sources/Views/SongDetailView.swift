@@ -6,17 +6,6 @@ struct SongDetailView: View {
     @ObservedObject var viewModel: SongDetailViewModel
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var navigationManager: NavigationManager
-    @ObservedObject private var nowPlayingViewModel = NowPlayingViewModel.shared
-    
-    // Check if this song is currently playing
-    private var isCurrentlyPlaying: Bool {
-        nowPlayingViewModel.currentSong?.id == viewModel.song.id
-    }
-    
-    // Check if this song is the current song and actively playing (not paused)
-    private var isActivelyPlaying: Bool {
-        isCurrentlyPlaying && nowPlayingViewModel.isPlaying
-    }
     
     var body: some View {
         ScrollView {
@@ -24,8 +13,8 @@ struct SongDetailView: View {
                 // Enhanced artwork view with MusicKit support and progressive loading
                 ArtworkDetailView(
                     song: viewModel.song,
-                    isCurrentlyPlaying: isCurrentlyPlaying,
-                    isActivelyPlaying: isActivelyPlaying
+                    isCurrentlyPlaying: false,
+                    isActivelyPlaying: false
                 )
                 
                 // Primary song information
@@ -125,13 +114,9 @@ struct SongDetailView: View {
                         }
                     }
                     
-                    // Data Source Information Section (simplified, removed enhancement status)
-                    DetailSectionView(title: "Data Sources") {
-                        DetailRowView(label: "Primary Data", value: "Apple Music Library")
-                        if viewModel.song.hasEnhancedData {
-                            DetailRowView(label: "Enhanced Data", value: "MusicKit")
-                            DetailRowView(label: "High-Quality Artwork", value: "Available")
-                        }
+                    // Enhancement Status Section
+                    DetailSectionView(title: "Enhancement Status") {
+                        DetailRowView(label: "Status", value: viewModel.enhancementStatus)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,19 +125,6 @@ struct SongDetailView: View {
             .padding(.bottom, 90) // Add bottom padding to account for the Now Playing bar
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    AppHaptics.mediumImpact()
-                    // Play this specific song
-                    NowPlayingViewModel.shared.playSong(viewModel.song)
-                }) {
-                    Image(systemName: isCurrentlyPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(AppColors.primary)
-                }
-            }
-        }
     }
 }
 
