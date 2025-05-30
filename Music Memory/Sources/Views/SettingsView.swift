@@ -260,9 +260,7 @@ struct CacheDetailView: View {
     
     private func loadCacheInfo() {
         Task {
-            let info = await Task.detached {
-                return viewModel.getDetailedCacheInfo()
-            }.value
+            let info = viewModel.getDetailedCacheInfo()
             
             await MainActor.run {
                 self.cacheInfo = info
