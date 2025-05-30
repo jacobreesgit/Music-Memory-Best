@@ -1,5 +1,5 @@
 import SwiftUI
-import MediaPlayer
+@preconcurrency import MediaPlayer
 import Combine
 import AVFoundation
 import MusicKit
@@ -78,22 +78,8 @@ struct NowPlayingBar: View {
     }
     
     private var artworkView: some View {
-        Group {
-            if let image = currentImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Image(systemName: "music.note")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .padding(45 / 4)
-                    .foregroundColor(AppColors.secondaryText)
-            }
-        }
-        .frame(width: 45, height: 45)
-        .background(AppColors.secondaryBackground)
-        .cornerRadius(AppRadius.small)
+        // Use enhanced artwork view with MusicKit support
+        NowPlayingArtworkView(song: viewModel.currentSong)
     }
     
     private func rankText(_ rank: Int) -> some View {
@@ -113,7 +99,7 @@ struct NowPlayingBar: View {
                     .foregroundColor(AppColors.primaryText)
                     .lineLimit(1)
                 
-                // Show MusicKit enhancement indicator if available (ready for future)
+                // Show MusicKit enhancement indicator if available
                 if let currentSong = viewModel.currentSong, currentSong.hasEnhancedData {
                     Image(systemName: "sparkles")
                         .font(.system(size: 8))
@@ -295,8 +281,6 @@ struct NowPlayingBar: View {
         return Color(finalColor)
     }
 }
-
-// MARK: - Simplified NowPlayingViewModel (MediaPlayer Only)
 
 class NowPlayingViewModel: ObservableObject {
     // Shared instance for easier access
@@ -482,8 +466,8 @@ class NowPlayingViewModel: ObservableObject {
            prevSong.mediaItem != currentItem,
            !hasTrackedCurrentSong {
             
-            // Get the duration of the previous song
-            let duration = prevSong.mediaItem.playbackDuration
+            // Get the duration of the previous song using enhanced duration
+            let duration = prevSong.enhancedDuration
             
             // Check if we were near the end of the song (within last 5 seconds)
             let wasNearEnd = lastPlaybackPosition > 0 && lastPlaybackPosition >= duration - 5.0
@@ -498,8 +482,7 @@ class NowPlayingViewModel: ObservableObject {
                 // Provide haptic feedback
                 AppHaptics.success()
                 
-                // Post notification for song completion - this is the key fix!
-                // Always post the completion regardless of single song or queue
+                // Post notification for song completion
                 NotificationCenter.default.post(
                     name: .songPlayCompleted,
                     object: nil,
@@ -527,30 +510,33 @@ class NowPlayingViewModel: ObservableObject {
         let currentItem = musicPlayer.nowPlayingItem
         
         if let mediaItem = currentItem {
-            title = mediaItem.title ?? "Unknown Title"
-            artist = mediaItem.artist ?? "Unknown Artist"
-            currentArtwork = mediaItem.artwork
-            
-            // Find the enhanced Song object from our songs list
+            // Find the enhanced Song object from our songs list first
             if let enhancedSong = songs.first(where: { $0.mediaItem.persistentID == mediaItem.persistentID }) {
                 currentSong = enhancedSong
+                title = enhancedSong.title
+                artist = enhancedSong.enhancedArtist // Use enhanced artist name
             } else {
                 // Create a basic Song object if not found in our list
-                currentSong = Song(from: mediaItem)
+                let basicSong = Song(from: mediaItem)
+                currentSong = basicSong
+                title = basicSong.title
+                artist = basicSong.enhancedArtist
             }
+            
+            currentArtwork = mediaItem.artwork
             
             // Update rank based on current song
             if let song = currentSong {
                 updateRankForSong(song)
             }
             
-            // Try to load saved artwork first, then fall back to system artwork
+            // Try to load saved artwork first, then fall back to enhanced artwork loading
             if currentSong != nil {
                 loadSavedArtworkIfNeeded()
             }
             
-            // Update artwork - MediaPlayer only for now
-            updateArtwork(currentArtwork)
+            // Update artwork with MusicKit enhancement
+            updateEnhancedArtwork()
             
             isVisible = true
         } else {
@@ -564,25 +550,47 @@ class NowPlayingViewModel: ObservableObject {
         }
     }
     
-    private func updateArtwork(_ artwork: MPMediaItemArtwork?) {
-        // Use MediaPlayer artwork only - MusicKit enhancement ready for future implementation
-        if currentImage == nil {
-            if let artwork = artwork {
-                currentImage = artwork.image(at: CGSize(width: 45, height: 45))
-            } else {
-                currentImage = nil
-            }
-        } else {
-            // We have saved artwork loaded, but system artwork became available
-            // Update with system artwork and clear saved artwork to prevent future conflicts
-            if let artwork = artwork {
-                let systemImage = artwork.image(at: CGSize(width: 45, height: 45))
-                if systemImage != nil {
-                    currentImage = systemImage
-                    // Clear saved artwork since system artwork is now available
-                    artworkPersistenceService?.clearSavedArtwork()
-                    logger.log("System artwork loaded, cleared saved artwork", level: .debug)
+    private func updateEnhancedArtwork() {
+        // Skip if we already have saved artwork loaded
+        if currentImage != nil {
+            return
+        }
+        
+        guard let song = currentSong else { return }
+        
+        Task {
+            await loadEnhancedArtworkAsync(for: song)
+        }
+    }
+    
+    @MainActor
+    private func loadEnhancedArtworkAsync(for song: Song) {
+        // Try MusicKit artwork first (higher quality)
+        if let enhancedArtwork = song.enhancedArtwork {
+            Task {
+                do {
+                    let artworkImage = try await enhancedArtwork.image(at: CGSize(width: 90, height: 90))
+                    self.currentImage = artworkImage
+                    logger.log("Loaded MusicKit artwork for now playing: '\(song.title)'", level: .debug)
+                    return
+                } catch {
+                    logger.log("Failed to load MusicKit artwork for now playing: \(error.localizedDescription)", level: .debug)
+                    // Fall through to MediaPlayer artwork
                 }
+            }
+        }
+        
+        // Fallback to MediaPlayer artwork
+        if let artwork = song.artwork {
+            Task {
+                let image = await withCheckedContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let artworkImage = artwork.image(at: CGSize(width: 90, height: 90))
+                        continuation.resume(returning: artworkImage)
+                    }
+                }
+                self.currentImage = image
+                logger.log("Loaded MediaPlayer artwork for now playing: '\(song.title)'", level: .debug)
             }
         }
     }

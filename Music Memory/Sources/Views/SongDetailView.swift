@@ -21,8 +21,9 @@ struct SongDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppSpacing.large) {
+                // Enhanced artwork view with MusicKit support
                 ArtworkDetailView(
-                    artwork: viewModel.artwork,
+                    song: viewModel.song,
                     isCurrentlyPlaying: isCurrentlyPlaying,
                     isActivelyPlaying: isActivelyPlaying
                 )
@@ -33,7 +34,7 @@ struct SongDetailView: View {
                         TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
                             .multilineTextAlignment(.center)
                         
-                        // Show MusicKit enhancement indicator if available (ready for future)
+                        // Show MusicKit enhancement indicator if available
                         if viewModel.song.hasEnhancedData {
                             Image(systemName: "sparkles")
                                 .font(.title3)
@@ -42,8 +43,19 @@ struct SongDetailView: View {
                         }
                     }
 
-                    SubheadlineText(text: viewModel.song.artist)
-                    SubheadlineText(text: viewModel.song.album)
+                    SubheadlineText(text: viewModel.song.enhancedArtist)
+                    SubheadlineText(text: viewModel.song.enhancedAlbum)
+                    
+                    // Explicit content indicator
+                    if viewModel.isExplicit {
+                        HStack {
+                            Image(systemName: "e.square.fill")
+                                .foregroundColor(AppColors.secondaryText)
+                            Text("Explicit")
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.secondaryText)
+                        }
+                    }
                     
                     // Play count highlight
                     HStack {
@@ -65,7 +77,7 @@ struct SongDetailView: View {
                 Divider()
                     .padding(.top, AppSpacing.small)
                 
-                // Enhanced information notice if MusicKit data is available (ready for future)
+                // Enhanced information notice if MusicKit data is available
                 if viewModel.song.hasEnhancedData {
                     HStack {
                         Image(systemName: "sparkles")
@@ -110,31 +122,44 @@ struct SongDetailView: View {
                         if viewModel.bpm > 0 {
                             DetailRowView(label: "BPM", value: "\(viewModel.bpm)")
                         }
+                        if viewModel.isExplicit {
+                            DetailRowView(label: "Content Rating", value: "Explicit")
+                        }
                     }
                     
                     // Creator Information Section
                     if viewModel.composer != "Unknown" {
                         DetailSectionView(title: "Creator Information") {
+                            DetailRowView(label: "Artist", value: viewModel.song.enhancedArtist)
                             DetailRowView(label: "Composer", value: viewModel.composer)
                         }
                     }
                     
                     // Release Information Section
                     DetailSectionView(title: "Release Information") {
-                        DetailRowView(label: "Album", value: viewModel.song.album)
+                        DetailRowView(label: "Album", value: viewModel.song.enhancedAlbum)
                         if viewModel.releaseDate != "Unknown" {
                             DetailRowView(label: "Release Date", value: viewModel.releaseDate)
+                        }
+                    }
+                    
+                    // File Information Section
+                    if viewModel.fileSize != "Unknown" {
+                        DetailSectionView(title: "File Information") {
+                            DetailRowView(label: "File Size", value: viewModel.fileSize)
                         }
                     }
                     
                     // Data Source Information Section
                     DetailSectionView(title: "Data Sources") {
                         DetailRowView(label: "Primary Data", value: "Apple Music Library")
+                        DetailRowView(label: "Enhancement Status", value: viewModel.enhancementStatus)
                         if viewModel.song.hasEnhancedData {
                             DetailRowView(label: "Enhanced Data", value: "MusicKit")
                             DetailRowView(label: "High-Quality Artwork", value: "Available")
+                            DetailRowView(label: "Enhanced Metadata", value: "Available")
                         } else {
-                            DetailRowView(label: "Enhancement Status", value: "Ready for Future Enhancement")
+                            DetailRowView(label: "Enhancement", value: "Ready for Future Enhancement")
                         }
                     }
                 }
@@ -144,6 +169,19 @@ struct SongDetailView: View {
             .padding(.bottom, 90) // Add bottom padding to account for the Now Playing bar
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    AppHaptics.mediumImpact()
+                    // Play this specific song
+                    NowPlayingViewModel.shared.playSong(viewModel.song)
+                }) {
+                    Image(systemName: isCurrentlyPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(AppColors.primary)
+                }
+            }
+        }
     }
 }
 

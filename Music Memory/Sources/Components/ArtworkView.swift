@@ -1,16 +1,20 @@
 import SwiftUI
-import MediaPlayer
+@preconcurrency import MediaPlayer
+import MusicKit
 
 struct ArtworkView: View {
     let artwork: MPMediaItemArtwork?
+    let enhancedArtwork: Artwork?
     let size: CGFloat
     let isCurrentlyPlaying: Bool
     let isActivelyPlaying: Bool
     @State private var image: UIImage?
+    @State private var isLoading: Bool = true
     @State private var animationOffset: CGFloat = 0
     
-    init(artwork: MPMediaItemArtwork?, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
+    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
         self.artwork = artwork
+        self.enhancedArtwork = enhancedArtwork
         self.size = size
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
@@ -19,6 +23,7 @@ struct ArtworkView: View {
     // Convenience initializer for Song objects
     init(song: Song, size: CGFloat, isCurrentlyPlaying: Bool = false, isActivelyPlaying: Bool = false) {
         self.artwork = song.artwork
+        self.enhancedArtwork = song.enhancedArtwork
         self.size = size
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
@@ -31,6 +36,15 @@ struct ArtworkView: View {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                } else if isLoading {
+                    // Show subtle loading state
+                    RoundedRectangle(cornerRadius: AppRadius.small)
+                        .fill(AppColors.secondaryBackground)
+                        .overlay(
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .tint(AppColors.secondaryText)
+                        )
                 } else {
                     Image(systemName: "music.note")
                         .resizable()
@@ -84,10 +98,46 @@ struct ArtworkView: View {
     }
     
     private func loadArtwork() {
-        // Use MediaPlayer artwork - MusicKit enhancement ready for future implementation
-        if let artwork = artwork {
-            image = artwork.image(at: CGSize(width: size, height: size))
+        Task {
+            await loadArtworkAsync()
         }
+    }
+    
+    @MainActor
+    private func loadArtworkAsync() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Determine the appropriate size with 2x resolution for crisp display
+        let targetSize = CGSize(width: size * 2, height: size * 2)
+        
+        // Try MusicKit artwork first (higher quality)
+        if let enhancedArtwork = enhancedArtwork {
+            do {
+                // MusicKit Artwork uses url(width:height:) method
+                if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
+                    let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                    if let artworkImage = UIImage(data: data) {
+                        self.image = artworkImage
+                        return
+                    }
+                }
+            } catch {
+                // MusicKit artwork failed, fall back to MediaPlayer
+                print("MusicKit artwork loading failed: \(error.localizedDescription)")
+            }
+        }
+        
+        // Fallback to MediaPlayer artwork
+        if let artwork = artwork {
+            // Load MediaPlayer artwork on background queue to avoid blocking UI
+            let mediaPlayerImage = await Task.detached {
+                artwork.image(at: targetSize)
+            }.value
+            self.image = mediaPlayerImage
+        }
+        
+        // If no artwork is available, image remains nil and default icon will show
     }
     
     private func startAnimation() {
@@ -108,13 +158,24 @@ struct ArtworkView: View {
 
 struct ArtworkDetailView: View {
     let artwork: UIImage?
+    let enhancedArtwork: Artwork?
     let isCurrentlyPlaying: Bool
     let isActivelyPlaying: Bool
     @State private var displayImage: UIImage?
+    @State private var isLoading: Bool = true
     @State private var animationOffset: CGFloat = 0
     
-    init(artwork: UIImage?, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool) {
+    init(artwork: UIImage?, enhancedArtwork: Artwork? = nil, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool) {
         self.artwork = artwork
+        self.enhancedArtwork = enhancedArtwork
+        self.isCurrentlyPlaying = isCurrentlyPlaying
+        self.isActivelyPlaying = isActivelyPlaying
+    }
+    
+    // Convenience initializer for Song objects
+    init(song: Song, isCurrentlyPlaying: Bool, isActivelyPlaying: Bool) {
+        self.artwork = song.artwork?.image(at: CGSize(width: 600, height: 600))
+        self.enhancedArtwork = song.enhancedArtwork
         self.isCurrentlyPlaying = isCurrentlyPlaying
         self.isActivelyPlaying = isActivelyPlaying
     }
@@ -127,6 +188,23 @@ struct ArtworkDetailView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .cornerRadius(AppRadius.large)
+                        .appShadow(AppShadow.medium)
+                } else if isLoading {
+                    // Show loading state for detail view
+                    RoundedRectangle(cornerRadius: AppRadius.large)
+                        .fill(AppColors.secondaryBackground)
+                        .frame(maxWidth: 300, maxHeight: 300)
+                        .overlay(
+                            VStack(spacing: AppSpacing.small) {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                    .tint(AppColors.primary)
+                                
+                                Text("Loading artwork...")
+                                    .font(AppFonts.caption)
+                                    .foregroundColor(AppColors.secondaryText)
+                            }
+                        )
                         .appShadow(AppShadow.medium)
                 } else {
                     Image(systemName: "music.note")
@@ -182,10 +260,42 @@ struct ArtworkDetailView: View {
     }
     
     private func loadDetailArtwork() {
-        // Use provided artwork - MusicKit enhancement ready for future implementation
-        if let artwork = artwork {
-            displayImage = artwork
+        Task {
+            await loadDetailArtworkAsync()
         }
+    }
+    
+    @MainActor
+    private func loadDetailArtworkAsync() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // High resolution for detail view (600x600)
+        let targetSize = CGSize(width: 600, height: 600)
+        
+        // Try MusicKit artwork first (highest quality)
+        if let enhancedArtwork = enhancedArtwork {
+            do {
+                // MusicKit Artwork uses url(width:height:) method
+                if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
+                    let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                    if let artworkImage = UIImage(data: data) {
+                        self.displayImage = artworkImage
+                        return
+                    }
+                }
+            } catch {
+                // MusicKit artwork failed, fall back to provided artwork
+                print("MusicKit detail artwork loading failed: \(error.localizedDescription)")
+            }
+        }
+        
+        // Use provided artwork (from MediaPlayer)
+        if let artwork = artwork {
+            self.displayImage = artwork
+        }
+        
+        // If no artwork is available, displayImage remains nil and default icon will show
     }
     
     private func startAnimation() {
@@ -199,5 +309,95 @@ struct ArtworkDetailView: View {
         let maxHeight: CGFloat = 40
         let animationFactor = sin(animationOffset * .pi + Double(index) * 0.8)
         return baseHeight + (maxHeight - baseHeight) * max(0, animationFactor)
+    }
+}
+
+// MARK: - Now Playing Bar Artwork (90x90 for crisp display)
+
+struct NowPlayingArtworkView: View {
+    let artwork: MPMediaItemArtwork?
+    let enhancedArtwork: Artwork?
+    @State private var image: UIImage?
+    @State private var isLoading: Bool = true
+    
+    init(artwork: MPMediaItemArtwork?, enhancedArtwork: Artwork? = nil) {
+        self.artwork = artwork
+        self.enhancedArtwork = enhancedArtwork
+    }
+    
+    // Convenience initializer for Song objects
+    init(song: Song?) {
+        self.artwork = song?.artwork
+        self.enhancedArtwork = song?.enhancedArtwork
+    }
+    
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if isLoading {
+                RoundedRectangle(cornerRadius: AppRadius.small)
+                    .fill(AppColors.secondaryBackground)
+                    .overlay(
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .tint(AppColors.secondaryText)
+                    )
+            } else {
+                Image(systemName: "music.note")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding(45 / 4)
+                    .foregroundColor(AppColors.secondaryText)
+            }
+        }
+        .frame(width: 45, height: 45)
+        .background(AppColors.secondaryBackground)
+        .cornerRadius(AppRadius.small)
+        .onAppear {
+            loadNowPlayingArtwork()
+        }
+    }
+    
+    private func loadNowPlayingArtwork() {
+        Task {
+            await loadNowPlayingArtworkAsync()
+        }
+    }
+    
+    @MainActor
+    private func loadNowPlayingArtworkAsync() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Crisp size for now playing bar (90x90 for 45pt display)
+        let targetSize = CGSize(width: 90, height: 90)
+        
+        // Try MusicKit artwork first
+        if let enhancedArtwork = enhancedArtwork {
+            do {
+                // MusicKit Artwork uses url(width:height:) method
+                if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
+                    let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                    if let artworkImage = UIImage(data: data) {
+                        self.image = artworkImage
+                        return
+                    }
+                }
+            } catch {
+                // MusicKit artwork failed, fall back to MediaPlayer
+                print("MusicKit now playing artwork loading failed: \(error.localizedDescription)")
+            }
+        }
+        
+        // Fallback to MediaPlayer artwork
+        if let artwork = artwork {
+            let mediaPlayerImage = await Task.detached {
+                artwork.image(at: targetSize)
+            }.value
+            self.image = mediaPlayerImage
+        }
     }
 }

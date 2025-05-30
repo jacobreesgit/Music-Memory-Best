@@ -8,7 +8,6 @@ struct SongRowView: View {
     let rankChange: RankChange?
     let onPlay: () -> Void
     let onNavigate: () -> Void
-    @State private var image: UIImage?
     @ObservedObject private var nowPlayingViewModel = NowPlayingViewModel.shared
     
     // Check if this song is currently playing
@@ -53,17 +52,12 @@ struct SongRowView: View {
                     .frame(width: (index + 1) >= 1000 ? 47 : 37, alignment: .center)
                 
                 VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                    // Use smaller, sleeker fonts matching now playing bar
-                    Text(song.title)
-                        .font(AppFonts.callout)
-                        .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
-                        .foregroundColor(AppColors.primaryText)
-                        .lineLimit(1)
-
+                    // Song title with MusicKit enhancement if available
                     HStack(spacing: AppSpacing.tiny) {
-                        Text(song.artist)
-                            .font(AppFonts.detail)
-                            .foregroundColor(AppColors.secondaryText)
+                        Text(song.title)
+                            .font(AppFonts.callout)
+                            .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
+                            .foregroundColor(AppColors.primaryText)
                             .lineLimit(1)
                         
                         // Show MusicKit enhancement indicator if available
@@ -71,6 +65,21 @@ struct SongRowView: View {
                             Image(systemName: "sparkles")
                                 .font(.system(size: 8))
                                 .foregroundColor(AppColors.primary.opacity(0.7))
+                        }
+                    }
+
+                    // Artist name (use enhanced artist name)
+                    HStack(spacing: AppSpacing.tiny) {
+                        Text(song.enhancedArtist)
+                            .font(AppFonts.detail)
+                            .foregroundColor(AppColors.secondaryText)
+                            .lineLimit(1)
+                        
+                        // Show explicit indicator for explicit content
+                        if song.isExplicit {
+                            Image(systemName: "e.square.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(AppColors.secondaryText.opacity(0.7))
                         }
                     }
                 }
@@ -141,6 +150,19 @@ struct SongListView: View {
                 }
             }
         )
+        .refreshable {
+            // Add pull-to-refresh functionality to trigger MusicKit re-enhancement
+            Task {
+                await viewModel.loadSongs()
+            }
+        }
+        .overlay(alignment: .top) {
+            // Show enhancement status when songs are being processed
+            if viewModel.isLoading {
+                EnhancementStatusView()
+                    .padding(.top, AppSpacing.small)
+            }
+        }
     }
     
     private func playSongFromQueue(_ song: Song, queue: [Song]) {
@@ -162,6 +184,33 @@ struct PlayCountView: View {
             Text("plays")
                 .font(AppFonts.detail)
                 .foregroundColor(AppColors.secondaryText)
+        }
+    }
+}
+
+// MARK: - Enhancement Status View
+
+struct EnhancementStatusView: View {
+    @State private var isAnimating = false
+    
+    var body: some View {
+        HStack(spacing: AppSpacing.small) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12))
+                .foregroundColor(AppColors.primary)
+                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: isAnimating)
+            
+            Text("Enhancing with MusicKit...")
+                .font(AppFonts.caption)
+                .foregroundColor(AppColors.secondaryText)
+        }
+        .padding(.horizontal, AppSpacing.small)
+        .padding(.vertical, AppSpacing.tiny)
+        .background(AppColors.primary.opacity(0.1))
+        .cornerRadius(AppRadius.small)
+        .onAppear {
+            isAnimating = true
         }
     }
 }

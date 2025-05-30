@@ -1,13 +1,14 @@
 import Foundation
 import UIKit
 import Combine
-import MediaPlayer
+@preconcurrency import MediaPlayer
+import MusicKit
 
 class SongDetailViewModel: ObservableObject {
     @Published var song: Song
     @Published var artwork: UIImage?
     
-    // Additional song details
+    // Enhanced song details with MusicKit integration
     @Published var genre: String
     @Published var duration: String
     @Published var releaseDate: String
@@ -19,6 +20,8 @@ class SongDetailViewModel: ObservableObject {
     @Published var discNumber: String
     @Published var bpm: Int
     @Published var fileSize: String
+    @Published var isExplicit: Bool
+    @Published var enhancementStatus: String
     
     private let logger: LoggerProtocol
     private var cancellables = Set<AnyCancellable>()
@@ -27,7 +30,7 @@ class SongDetailViewModel: ObservableObject {
         self.song = song
         self.logger = logger
         
-        // Extract metadata
+        // Initialize with default values
         self.genre = ""
         self.duration = ""
         self.releaseDate = ""
@@ -39,12 +42,14 @@ class SongDetailViewModel: ObservableObject {
         self.discNumber = ""
         self.bpm = 0
         self.fileSize = ""
+        self.isExplicit = false
+        self.enhancementStatus = ""
         
-        // Extract all metadata
-        extractMetadata()
+        // Extract all metadata using enhanced methods
+        extractEnhancedMetadata()
         
-        // Load artwork
-        loadArtwork()
+        // Load artwork (with MusicKit enhancement)
+        loadEnhancedArtwork()
         
         // Listen for song play completion notifications
         setupPlayCompletionListener()
@@ -67,13 +72,15 @@ class SongDetailViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
-    private func extractMetadata() {
+    private func extractEnhancedMetadata() {
         let mediaItem = song.mediaItem
         
-        self.genre = mediaItem.value(forProperty: MPMediaItemPropertyGenre) as? String ?? "Unknown"
+        // Use enhanced genre from MusicKit if available, fallback to MediaPlayer
+        self.genre = song.enhancedGenre
         
-        // Format duration from seconds to mm:ss
-        if let durationInSeconds = mediaItem.value(forProperty: MPMediaItemPropertyPlaybackDuration) as? TimeInterval {
+        // Use enhanced duration from MusicKit if available
+        let durationInSeconds = song.enhancedDuration
+        if durationInSeconds > 0 {
             let minutes = Int(durationInSeconds / 60)
             let seconds = Int(durationInSeconds.truncatingRemainder(dividingBy: 60))
             self.duration = String(format: "%d:%02d", minutes, seconds)
@@ -81,8 +88,8 @@ class SongDetailViewModel: ObservableObject {
             self.duration = "Unknown"
         }
         
-        // Format release date if available
-        if let releaseDate = mediaItem.value(forProperty: MPMediaItemPropertyReleaseDate) as? Date {
+        // Use enhanced release date
+        if let releaseDate = song.enhancedReleaseDate {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
             formatter.timeStyle = .none
@@ -91,7 +98,8 @@ class SongDetailViewModel: ObservableObject {
             self.releaseDate = "Unknown"
         }
         
-        self.composer = mediaItem.value(forProperty: MPMediaItemPropertyComposer) as? String ?? "Unknown"
+        // Use enhanced composer
+        self.composer = song.enhancedComposer
         
         // Format last played date with relative time formatting
         if let lastPlayedDate = mediaItem.value(forProperty: MPMediaItemPropertyLastPlayedDate) as? Date {
@@ -103,28 +111,10 @@ class SongDetailViewModel: ObservableObject {
         self.skipCount = mediaItem.value(forProperty: MPMediaItemPropertySkipCount) as? Int ?? 0
         self.rating = mediaItem.value(forProperty: MPMediaItemPropertyRating) as? Int ?? 0
         
-        // Track and disc numbers
-        if let trackNumber = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackNumber) as? Int {
-            let totalTracks = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int
-            if let total = totalTracks {
-                self.trackNumber = "\(trackNumber) of \(total)"
-            } else {
-                self.trackNumber = "\(trackNumber)"
-            }
-        } else {
-            self.trackNumber = "Unknown"
-        }
-        
-        if let discNumber = mediaItem.value(forProperty: MPMediaItemPropertyDiscNumber) as? Int {
-            let totalDiscs = mediaItem.value(forProperty: MPMediaItemPropertyDiscCount) as? Int
-            if let total = totalDiscs {
-                self.discNumber = "\(discNumber) of \(total)"
-            } else {
-                self.discNumber = "\(discNumber)"
-            }
-        } else {
-            self.discNumber = "Unknown"
-        }
+        // Use enhanced track and disc information
+        let trackInfo = song.enhancedTrackInfo
+        self.trackNumber = trackInfo.trackNumber
+        self.discNumber = trackInfo.discNumber
         
         self.bpm = mediaItem.value(forProperty: MPMediaItemPropertyBeatsPerMinute) as? Int ?? 0
         
@@ -147,6 +137,18 @@ class SongDetailViewModel: ObservableObject {
         } else {
             self.fileSize = "Unknown"
         }
+        
+        // MusicKit-specific enhancements
+        self.isExplicit = song.isExplicit
+        
+        // Enhancement status
+        if song.hasEnhancedData {
+            self.enhancementStatus = "Enhanced with MusicKit"
+        } else {
+            self.enhancementStatus = "Ready for Enhancement"
+        }
+        
+        logger.log("Extracted metadata for '\(song.title)' - Enhanced: \(song.hasEnhancedData)", level: .debug)
     }
     
     /// Formats a date relative to the current time in user-friendly terms
@@ -254,10 +256,43 @@ class SongDetailViewModel: ObservableObject {
         }
     }
     
-    private func loadArtwork() {
-        if let artwork = song.artwork {
-            // Load the artwork at an appropriate size for details view
-            self.artwork = artwork.image(at: CGSize(width: 300, height: 300))
+    private func loadEnhancedArtwork() {
+        Task {
+            await loadEnhancedArtworkAsync()
+        }
+    }
+    
+    @MainActor
+    private func loadEnhancedArtworkAsync() {
+        // Try MusicKit artwork first for higher quality
+        if let enhancedArtwork = song.enhancedArtwork {
+            Task {
+                do {
+                    // MusicKit Artwork uses url(width:height:) method
+                    if let artworkURL = enhancedArtwork.url(width: 600, height: 600) {
+                        let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                        if let artworkImage = UIImage(data: data) {
+                            self.artwork = artworkImage
+                            logger.log("Loaded MusicKit artwork for '\(song.title)'", level: .debug)
+                            return
+                        }
+                    }
+                } catch {
+                    logger.log("Failed to load MusicKit artwork for '\(song.title)': \(error.localizedDescription)", level: .debug)
+                    // Fall through to MediaPlayer artwork
+                }
+            }
+        }
+        
+        // Fallback to MediaPlayer artwork
+        if let mpArtwork = song.artwork {
+            Task {
+                let image = await Task.detached {
+                    mpArtwork.image(at: CGSize(width: 600, height: 600))
+                }.value
+                self.artwork = image
+                logger.log("Loaded MediaPlayer artwork for '\(song.title)'", level: .debug)
+            }
         }
     }
 }
