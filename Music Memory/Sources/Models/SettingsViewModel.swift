@@ -24,7 +24,9 @@ class SettingsViewModel: ObservableObject {
                 return settingsService.getLocalTrackingDataSize()
             }.value
             
-            self.localDataSize = size
+            await MainActor.run {
+                self.localDataSize = size
+            }
         }
     }
     
@@ -58,6 +60,47 @@ class SettingsViewModel: ObservableObject {
         
         // Post notification to refresh the song list if needed
         NotificationCenter.default.post(name: .localDataCleared, object: nil)
+    }
+    
+    // MARK: - Additional Cache Info Methods (for detailed view if needed)
+    
+    func getDetailedCacheInfo() -> CacheInfo {
+        // Get individual cache sizes for detailed breakdown
+        let playCountSize = (settingsService as? SettingsService)?.getPlayCountCacheSize() ?? "Unknown"
+        let rankHistorySize = (settingsService as? SettingsService)?.getRankHistoryCacheSize() ?? "Unknown"
+        let enhancedSongSize = (settingsService as? SettingsService)?.getEnhancedSongCacheSize() ?? "Unknown"
+        let artworkSize = (settingsService as? SettingsService)?.getArtworkCacheSize() ?? "Unknown"
+        let musicKitSearchSize = (settingsService as? SettingsService)?.getMusicKitSearchCacheSize() ?? "Unknown"
+        
+        return CacheInfo(
+            totalSize: localDataSize,
+            playCountSize: playCountSize,
+            rankHistorySize: rankHistorySize,
+            enhancedSongSize: enhancedSongSize,
+            artworkSize: artworkSize,
+            musicKitSearchSize: musicKitSearchSize
+        )
+    }
+}
+
+// MARK: - Cache Info Structure
+
+struct CacheInfo {
+    let totalSize: String
+    let playCountSize: String
+    let rankHistorySize: String
+    let enhancedSongSize: String
+    let artworkSize: String
+    let musicKitSearchSize: String
+    
+    var breakdown: [(name: String, size: String)] {
+        return [
+            ("Play Count Tracking", playCountSize),
+            ("Rank History", rankHistorySize),
+            ("Enhanced Song Data", enhancedSongSize),
+            ("Artwork Cache", artworkSize),
+            ("MusicKit Search Cache", musicKitSearchSize)
+        ]
     }
 }
 

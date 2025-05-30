@@ -9,9 +9,11 @@ class DIContainer: ObservableObject {
     let navigationManager: NavigationManager
     let rankHistoryService: RankHistoryServiceProtocol
     let artworkPersistenceService: ArtworkPersistenceServiceProtocol
+    let enhancedSongCacheService: EnhancedSongCacheServiceProtocol
     let appLifecycleManager: AppLifecycleManager
     let settingsService: SettingsServiceProtocol
     let enhancementPriorityService: EnhancementPriorityServiceProtocol
+    let cacheManagementService: CacheManagementServiceProtocol
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
@@ -21,9 +23,11 @@ class DIContainer: ObservableObject {
         navigationManager: NavigationManager,
         rankHistoryService: RankHistoryServiceProtocol,
         artworkPersistenceService: ArtworkPersistenceServiceProtocol,
+        enhancedSongCacheService: EnhancedSongCacheServiceProtocol,
         appLifecycleManager: AppLifecycleManager,
         settingsService: SettingsServiceProtocol,
-        enhancementPriorityService: EnhancementPriorityServiceProtocol
+        enhancementPriorityService: EnhancementPriorityServiceProtocol,
+        cacheManagementService: CacheManagementServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.permissionService = permissionService
@@ -32,9 +36,11 @@ class DIContainer: ObservableObject {
         self.navigationManager = navigationManager
         self.rankHistoryService = rankHistoryService
         self.artworkPersistenceService = artworkPersistenceService
+        self.enhancedSongCacheService = enhancedSongCacheService
         self.appLifecycleManager = appLifecycleManager
         self.settingsService = settingsService
         self.enhancementPriorityService = enhancementPriorityService
+        self.cacheManagementService = cacheManagementService
     }
     
     // Factory method for production
@@ -43,6 +49,7 @@ class DIContainer: ObservableObject {
         let permissionService = PermissionService()
         let rankHistoryService = RankHistoryService(logger: logger)
         let artworkPersistenceService = ArtworkPersistenceService(logger: logger)
+        let enhancedSongCacheService = EnhancedSongCacheService(logger: logger)
         let enhancementPriorityService = EnhancementPriorityService(logger: logger)
         
         let musicLibraryService = MusicLibraryService(
@@ -51,15 +58,26 @@ class DIContainer: ObservableObject {
             priorityService: enhancementPriorityService
         )
         
+        let cacheManagementService = CacheManagementService(
+            logger: logger,
+            rankHistoryService: rankHistoryService,
+            artworkPersistenceService: artworkPersistenceService,
+            enhancedSongCacheService: enhancedSongCacheService,
+            musicLibraryService: musicLibraryService
+        )
+        
         let settingsService = SettingsService(
             logger: logger,
             artworkPersistenceService: artworkPersistenceService,
-            rankHistoryService: rankHistoryService
+            rankHistoryService: rankHistoryService,
+            enhancedSongCacheService: enhancedSongCacheService
         )
+        
         let appLifecycleManager = AppLifecycleManager(
             logger: logger,
             artworkPersistenceService: artworkPersistenceService
         )
+        
         let appState = AppState()
         let navigationManager = NavigationManager()
         
@@ -71,9 +89,11 @@ class DIContainer: ObservableObject {
             navigationManager: navigationManager,
             rankHistoryService: rankHistoryService,
             artworkPersistenceService: artworkPersistenceService,
+            enhancedSongCacheService: enhancedSongCacheService,
             appLifecycleManager: appLifecycleManager,
             settingsService: settingsService,
-            enhancementPriorityService: enhancementPriorityService
+            enhancementPriorityService: enhancementPriorityService,
+            cacheManagementService: cacheManagementService
         )
     }
     

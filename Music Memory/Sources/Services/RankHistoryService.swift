@@ -40,8 +40,8 @@ class RankHistoryService: RankHistoryServiceProtocol {
             #endif
         }
         
-        // Save back to UserDefaults
-        let key = snapshotsKey(for: sortDescriptor)
+        // Save back to UserDefaults using centralized key management
+        let key = UserDefaultsKeys.rankSnapshotsKey(for: sortDescriptor)
         if let data = try? JSONEncoder().encode(snapshots) {
             UserDefaults.standard.set(data, forKey: key)
         }
@@ -99,11 +99,12 @@ class RankHistoryService: RankHistoryServiceProtocol {
     }
     
     func cleanupOldSnapshots() {
-        let keys = UserDefaults.standard.dictionaryRepresentation().keys
+        let userDefaults = UserDefaults.standard
+        let keys = userDefaults.dictionaryRepresentation().keys
         let snapshotKeys = keys.filter { $0.hasPrefix("rankSnapshots_") }
         
         for key in snapshotKeys {
-            guard let data = UserDefaults.standard.data(forKey: key),
+            guard let data = userDefaults.data(forKey: key),
                   let snapshots = try? JSONDecoder().decode([RankSnapshot].self, from: data) else {
                 continue
             }
@@ -114,20 +115,23 @@ class RankHistoryService: RankHistoryServiceProtocol {
             
             if recentSnapshots.count != snapshots.count {
                 if let cleanData = try? JSONEncoder().encode(recentSnapshots) {
-                    UserDefaults.standard.set(cleanData, forKey: key)
+                    userDefaults.set(cleanData, forKey: key)
                 }
                 #if DEBUG
                 logger.log("Cleaned up \(snapshots.count - recentSnapshots.count) old snapshots from \(key)", level: .debug)
                 #endif
             }
         }
+        
+        // Update last cleanup timestamp using centralized key management
+        userDefaults.set(Date().timeIntervalSince1970, forKey: UserDefaultsKeys.cacheLastCleanupDate)
     }
     
     func clearAllRankHistory() {
         let userDefaults = UserDefaults.standard
         let allKeys = userDefaults.dictionaryRepresentation().keys
         
-        // Remove all rank history keys
+        // Remove all rank history keys using the prefix pattern
         let rankHistoryKeys = allKeys.filter { $0.hasPrefix("rankSnapshots_") }
         
         for key in rankHistoryKeys {
@@ -138,7 +142,7 @@ class RankHistoryService: RankHistoryServiceProtocol {
     }
     
     private func getStoredSnapshots(for sortDescriptor: SortDescriptor) -> [RankSnapshot] {
-        let key = snapshotsKey(for: sortDescriptor)
+        let key = UserDefaultsKeys.rankSnapshotsKey(for: sortDescriptor)
         guard let data = UserDefaults.standard.data(forKey: key),
               let snapshots = try? JSONDecoder().decode([RankSnapshot].self, from: data) else {
             return []
@@ -146,7 +150,75 @@ class RankHistoryService: RankHistoryServiceProtocol {
         return snapshots
     }
     
-    private func snapshotsKey(for sortDescriptor: SortDescriptor) -> String {
-        "rankSnapshots_\(sortDescriptor.key)"
+    // MARK: - Additional Helper Methods for Cache Management
+    
+    func getRankHistoryCacheInfo() -> (entryCount: Int, totalSize: String) {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let rankHistoryKeys = allKeys.filter { $0.hasPrefix("rankSnapshots_") }
+        
+        var totalSize = 0
+        for key in rankHistoryKeys {
+            if let data = userDefaults.data(forKey: key) {
+                totalSize += data.count
+            }
+        }
+        
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        let sizeString = formatter.string(fromByteCount: Int64(totalSize))
+        
+        return (entryCount: rankHistoryKeys.count, totalSize: sizeString)
+    }
+    
+    func getSnapshotCount(for sortDescriptor: SortDescriptor) -> Int {
+        return getStoredSnapshots(for: sortDescriptor).count
+    }
+    
+    func getOldestSnapshotDate() -> Date? {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let rankHistoryKeys = allKeys.filter { $0.hasPrefix("rankSnapshots_") }
+        
+        var oldestDate: Date?
+        
+        for key in rankHistoryKeys {
+            guard let data = userDefaults.data(forKey: key),
+                  let snapshots = try? JSONDecoder().decode([RankSnapshot].self, from: data) else {
+                continue
+            }
+            
+            for snapshot in snapshots {
+                if oldestDate == nil || snapshot.timestamp < oldestDate! {
+                    oldestDate = snapshot.timestamp
+                }
+            }
+        }
+        
+        return oldestDate
+    }
+    
+    func getNewestSnapshotDate() -> Date? {
+        let userDefaults = UserDefaults.standard
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        let rankHistoryKeys = allKeys.filter { $0.hasPrefix("rankSnapshots_") }
+        
+        var newestDate: Date?
+        
+        for key in rankHistoryKeys {
+            guard let data = userDefaults.data(forKey: key),
+                  let snapshots = try? JSONDecoder().decode([RankSnapshot].self, from: data) else {
+                continue
+            }
+            
+            for snapshot in snapshots {
+                if newestDate == nil || snapshot.timestamp > newestDate! {
+                    newestDate = snapshot.timestamp
+                }
+            }
+        }
+        
+        return newestDate
     }
 }

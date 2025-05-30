@@ -22,9 +22,10 @@ struct Song: Identifiable, Equatable, Hashable {
         return playCount + localPlayCount
     }
     
-    /// Local play count stored in UserDefaults
+    /// Local play count stored in UserDefaults using centralized key management
     var localPlayCount: Int {
-        UserDefaults.standard.integer(forKey: "localPlayCount_\(id)")
+        let key = UserDefaultsKeys.localPlayCountKey(for: id)
+        return UserDefaults.standard.integer(forKey: key)
     }
     
     init(from mediaItem: MPMediaItem, musicKitTrack: MusicKit.Song? = nil) {
@@ -156,22 +157,25 @@ struct Song: Identifiable, Equatable, Hashable {
         return musicKitSong?.contentRating == .explicit
     }
     
-    // MARK: - Local Play Count Methods (UNCHANGED - Critical to Preserve)
+    // MARK: - Local Play Count Methods (Updated to use centralized UserDefaults keys)
     
     /// Increment the local play count for this song
     func incrementLocalPlayCount() {
         let currentLocal = localPlayCount
-        UserDefaults.standard.set(currentLocal + 1, forKey: "localPlayCount_\(id)")
+        let key = UserDefaultsKeys.localPlayCountKey(for: id)
+        UserDefaults.standard.set(currentLocal + 1, forKey: key)
     }
     
-    /// Get the baseline system play count
+    /// Get the baseline system play count using centralized key management
     var baselinePlayCount: Int {
-        UserDefaults.standard.integer(forKey: "baselinePlayCount_\(id)")
+        let key = UserDefaultsKeys.baselinePlayCountKey(for: id)
+        return UserDefaults.standard.integer(forKey: key)
     }
     
-    /// Update the baseline play count
+    /// Update the baseline play count using centralized key management
     func updateBaselinePlayCount(_ count: Int) {
-        UserDefaults.standard.set(count, forKey: "baselinePlayCount_\(id)")
+        let key = UserDefaultsKeys.baselinePlayCountKey(for: id)
+        UserDefaults.standard.set(count, forKey: key)
     }
     
     /// Sync local count with system count (called on app launch)
@@ -189,7 +193,8 @@ struct Song: Identifiable, Equatable, Hashable {
             
             logger.log("System play count increased by \(systemIncrease) for '\(title)'. Reducing local count from \(currentLocal) to \(newLocal)", level: .info)
             
-            UserDefaults.standard.set(newLocal, forKey: "localPlayCount_\(id)")
+            let localKey = UserDefaultsKeys.localPlayCountKey(for: id)
+            UserDefaults.standard.set(newLocal, forKey: localKey)
             
             // Update baseline
             updateBaselinePlayCount(currentSystemCount)
@@ -203,6 +208,38 @@ struct Song: Identifiable, Equatable, Hashable {
         } else {
             // No change in system count
             logger.log("No system play count change for '\(title)'", level: .debug)
+        }
+    }
+    
+    // MARK: - Cache Management Helpers
+    
+    /// Check if this song has cached enhanced data
+    func hasCachedEnhancedData() -> Bool {
+        let key = UserDefaultsKeys.enhancedSongKey(for: id)
+        return UserDefaults.standard.data(forKey: key) != nil
+    }
+    
+    /// Check if this song has cached artwork
+    func hasCachedArtwork() -> Bool {
+        let key = UserDefaultsKeys.artworkKey(for: id)
+        return UserDefaults.standard.data(forKey: key) != nil
+    }
+    
+    /// Get all UserDefaults keys associated with this song for debugging
+    func getAllAssociatedUserDefaultsKeys() -> [String] {
+        return [
+            UserDefaultsKeys.localPlayCountKey(for: id),
+            UserDefaultsKeys.baselinePlayCountKey(for: id),
+            UserDefaultsKeys.enhancedSongKey(for: id),
+            UserDefaultsKeys.artworkKey(for: id)
+        ]
+    }
+    
+    /// Clear all cached data for this song (useful for testing)
+    func clearAllCachedData() {
+        let keys = getAllAssociatedUserDefaultsKeys()
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
         }
     }
     

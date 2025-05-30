@@ -11,11 +11,36 @@ protocol MusicLibraryServiceProtocol {
     func enhanceSongsBatch(batchSize: Int) async -> [Song]
 }
 
+/// Cached MusicKit search result
+struct CachedMusicKitResult: Codable {
+    let searchTerm: String
+    let timestamp: Date
+    let musicKitSongId: String
+    let title: String
+    let artistName: String
+    let albumTitle: String?
+    let artworkURLString: String?
+    let duration: TimeInterval?
+    let releaseDate: Date?
+    let genreNames: [String]
+    let composerName: String?
+    let trackNumber: Int?
+    let isExplicit: Bool
+}
+
+/// Metadata for tracking MusicKit search cache
+struct MusicKitSearchMetadata: Codable {
+    let searchTerm: String
+    let timestamp: Date
+}
+
 actor MusicLibraryService: MusicLibraryServiceProtocol {
     private let permissionService: PermissionServiceProtocol
     private let logger: LoggerProtocol
     private let priorityService: EnhancementPriorityServiceProtocol
-    private var musicKitSearchCache: [String: MusicKit.Song] = [:]
+    private let userDefaults = UserDefaults.standard
+    private let searchCacheMaxAge: TimeInterval = 7 * 24 * 60 * 60 // 7 days
+    private let maxCachedSearches = 500 // Limit cached searches
     private var lastEnhancementTime: Date?
     private let enhancementCooldown: TimeInterval = 300 // 5 minutes between full enhancement runs
     
@@ -106,6 +131,55 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         return nil
     }
     
+    // MARK: - Cache Management
+    
+    func clearMusicKitSearchCache() {
+        let metadata = getMusicKitSearchMetadata()
+        
+        for item in metadata {
+            let key = UserDefaultsKeys.musicKitSearchKey(for: item.searchTerm)
+            userDefaults.removeObject(forKey: key)
+        }
+        
+        userDefaults.removeObject(forKey: UserDefaultsKeys.musicKitSearchMetadata)
+        
+        logger.log("Cleared MusicKit search cache: \(metadata.count) entries removed", level: .info)
+    }
+    
+    func cleanupOldMusicKitSearchCache() {
+        var metadata = getMusicKitSearchMetadata()
+        let oldEntries = metadata.filter { Date().timeIntervalSince($0.timestamp) > searchCacheMaxAge }
+        
+        // Remove old cache entries
+        for entry in oldEntries {
+            let key = UserDefaultsKeys.musicKitSearchKey(for: entry.searchTerm)
+            userDefaults.removeObject(forKey: key)
+        }
+        
+        // Remove old entries from metadata
+        metadata.removeAll { oldEntries.contains($0) }
+        
+        // If we have too many cached searches, remove oldest ones
+        if metadata.count > maxCachedSearches {
+            let sortedMetadata = metadata.sorted { $0.timestamp < $1.timestamp }
+            let toRemove = sortedMetadata.prefix(metadata.count - maxCachedSearches)
+            
+            for entry in toRemove {
+                let key = UserDefaultsKeys.musicKitSearchKey(for: entry.searchTerm)
+                userDefaults.removeObject(forKey: key)
+            }
+            
+            metadata = Array(sortedMetadata.suffix(maxCachedSearches))
+        }
+        
+        // Save updated metadata
+        saveMusicKitSearchMetadata(metadata)
+        
+        if !oldEntries.isEmpty {
+            logger.log("Cleaned up \(oldEntries.count) old MusicKit search cache entries", level: .debug)
+        }
+    }
+    
     // MARK: - Private Methods
     
     private func requestMusicKitPermission() async -> Bool {
@@ -176,18 +250,19 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         return isUploadedSong
     }
     
-    // MARK: - MusicKit Search and Matching
+    // MARK: - MusicKit Search and Matching with UserDefaults Caching
     
     private func searchMusicKitSong(for song: Song) async -> MusicKit.Song? {
-        // Check cache first
-        let cacheKey = "\(song.title)_\(song.artist)".lowercased()
-        if let cachedSong = musicKitSearchCache[cacheKey] {
-            return cachedSong
+        let searchTerm = "\(song.title) \(song.artist)"
+        
+        // Check UserDefaults cache first
+        if let cachedResult = getCachedMusicKitResult(for: searchTerm) {
+            // Convert cached result back to MusicKit.Song
+            return await convertCachedResultToMusicKitSong(cachedResult)
         }
         
         do {
             // Create search request
-            let searchTerm = "\(song.title) \(song.artist)"
             var request = MusicCatalogSearchRequest(term: searchTerm, types: [MusicKit.Song.self])
             request.limit = 5 // Get top 5 results for better matching
             
@@ -195,8 +270,8 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
             
             // Find best match using intelligent matching algorithm
             if let bestMatch = findBestMatch(for: song, in: response.songs) {
-                // Cache the result
-                musicKitSearchCache[cacheKey] = bestMatch
+                // Cache the result in UserDefaults
+                cacheMusicKitResult(searchTerm: searchTerm, musicKitSong: bestMatch)
                 return bestMatch
             }
             
@@ -206,6 +281,81 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
             logger.log("MusicKit search failed for '\(song.title)' by '\(song.artist)': \(error.localizedDescription)", level: .debug)
             return nil
         }
+    }
+    
+    private func getCachedMusicKitResult(for searchTerm: String) -> CachedMusicKitResult? {
+        let key = UserDefaultsKeys.musicKitSearchKey(for: searchTerm)
+        
+        guard let data = userDefaults.data(forKey: key),
+              let cachedResult = try? JSONDecoder().decode(CachedMusicKitResult.self, from: data) else {
+            return nil
+        }
+        
+        // Check if cache is still valid
+        if Date().timeIntervalSince(cachedResult.timestamp) > searchCacheMaxAge {
+            // Remove expired cache
+            userDefaults.removeObject(forKey: key)
+            removeFromMusicKitSearchMetadata(searchTerm: searchTerm)
+            return nil
+        }
+        
+        logger.log("Retrieved cached MusicKit search result for: '\(searchTerm)'", level: .debug)
+        return cachedResult
+    }
+    
+    private func cacheMusicKitResult(searchTerm: String, musicKitSong: MusicKit.Song) {
+        let cachedResult = CachedMusicKitResult(
+            searchTerm: searchTerm,
+            timestamp: Date(),
+            musicKitSongId: musicKitSong.id.rawValue,
+            title: musicKitSong.title,
+            artistName: musicKitSong.artistName,
+            albumTitle: musicKitSong.albumTitle,
+            artworkURLString: musicKitSong.artwork?.url(width: 300, height: 300)?.absoluteString,
+            duration: musicKitSong.duration,
+            releaseDate: musicKitSong.releaseDate,
+            genreNames: musicKitSong.genreNames,
+            composerName: musicKitSong.composerName,
+            trackNumber: musicKitSong.trackNumber,
+            isExplicit: musicKitSong.contentRating == .explicit
+        )
+        
+        do {
+            let data = try JSONEncoder().encode(cachedResult)
+            let key = UserDefaultsKeys.musicKitSearchKey(for: searchTerm)
+            userDefaults.set(data, forKey: key)
+            
+            // Update metadata
+            updateMusicKitSearchMetadata(searchTerm: searchTerm)
+            
+            logger.log("Cached MusicKit search result for: '\(searchTerm)'", level: .debug)
+        } catch {
+            logger.log("Failed to cache MusicKit search result: \(error.localizedDescription)", level: .error)
+        }
+    }
+    
+    private func convertCachedResultToMusicKitSong(_ cachedResult: CachedMusicKitResult) async -> MusicKit.Song? {
+        // Unfortunately, we can't reconstruct a full MusicKit.Song from cached data
+        // We would need to make another API call using the song ID
+        // For now, we'll use the cached data to create enhanced Song properties
+        
+        // This is a limitation of our caching approach - we can cache search results
+        // but recreating the full MusicKit.Song object requires another API call
+        
+        do {
+            // Try to get the song by ID
+            let songId = MusicItemID(cachedResult.musicKitSongId)
+            var request = MusicCatalogResourceRequest<MusicKit.Song>(matching: \.id, equalTo: songId)
+            let response = try await request.response()
+            
+            if let song = response.items.first {
+                return song
+            }
+        } catch {
+            logger.log("Failed to recreate MusicKit song from cache: \(error.localizedDescription)", level: .debug)
+        }
+        
+        return nil
     }
     
     private func findBestMatch(for song: Song, in results: MusicItemCollection<MusicKit.Song>) -> MusicKit.Song? {
@@ -302,5 +452,57 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         }
         
         return dp[m][n]
+    }
+    
+    // MARK: - MusicKit Search Metadata Management
+    
+    private func updateMusicKitSearchMetadata(searchTerm: String) {
+        var metadata = getMusicKitSearchMetadata()
+        
+        // Remove existing entry if present
+        metadata.removeAll { $0.searchTerm == searchTerm }
+        
+        // Add new entry
+        metadata.append(MusicKitSearchMetadata(
+            searchTerm: searchTerm,
+            timestamp: Date()
+        ))
+        
+        saveMusicKitSearchMetadata(metadata)
+    }
+    
+    private func removeFromMusicKitSearchMetadata(searchTerm: String) {
+        var metadata = getMusicKitSearchMetadata()
+        metadata.removeAll { $0.searchTerm == searchTerm }
+        saveMusicKitSearchMetadata(metadata)
+    }
+    
+    private func getMusicKitSearchMetadata() -> [MusicKitSearchMetadata] {
+        guard let data = userDefaults.data(forKey: UserDefaultsKeys.musicKitSearchMetadata),
+              let metadata = try? JSONDecoder().decode([MusicKitSearchMetadata].self, from: data) else {
+            return []
+        }
+        return metadata
+    }
+    
+    private func saveMusicKitSearchMetadata(_ metadata: [MusicKitSearchMetadata]) {
+        do {
+            let data = try JSONEncoder().encode(metadata)
+            userDefaults.set(data, forKey: UserDefaultsKeys.musicKitSearchMetadata)
+        } catch {
+            logger.log("Failed to save MusicKit search metadata: \(error.localizedDescription)", level: .error)
+        }
+    }
+}
+
+// MARK: - Comparable conformance for metadata sorting
+
+extension MusicKitSearchMetadata: Comparable {
+    static func < (lhs: MusicKitSearchMetadata, rhs: MusicKitSearchMetadata) -> Bool {
+        lhs.timestamp < rhs.timestamp
+    }
+    
+    static func == (lhs: MusicKitSearchMetadata, rhs: MusicKitSearchMetadata) -> Bool {
+        lhs.searchTerm == rhs.searchTerm
     }
 }
