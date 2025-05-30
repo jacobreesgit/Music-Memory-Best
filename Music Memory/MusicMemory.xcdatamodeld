@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="21754" systemVersion="22F82" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    
+    <!-- RecentPlay Entity -->
+    <entity name="RecentPlay" representedClassName="RecentPlay" syncable="YES">
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="songID" attributeType="String"/>
+        <attribute name="albumID" attributeType="String"/>
+        <attribute name="artistID" attributeType="String"/>
+        <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="playDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="completionPercentage" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="source" attributeType="String"/>
+        <attribute name="sessionID" attributeType="String"/>
+    </entity>
+    
+    <!-- DailyAggregate Entity -->
+    <entity name="DailyAggregate" representedClassName="DailyAggregate" syncable="YES">
+        <attribute name="entityID" attributeType="String"/>
+        <attribute name="entityType" attributeType="String"/>
+        <attribute name="date" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="playCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="averageCompletion" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+    </entity>
+    
+    <!-- ChartSnapshot Entity -->
+    <entity name="ChartSnapshot" representedClassName="ChartSnapshot" syncable="YES">
+        <attribute name="entityID" attributeType="String"/>
+        <attribute name="entityType" attributeType="String"/>
+        <attribute name="weekOf" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="position" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="playsThisWeek" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="movement" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="movementType" attributeType="String"/>
+    </entity>
+    
+    <!-- SongMetadata Entity -->
+    <entity name="SongMetadata" representedClassName="SongMetadata" syncable="YES">
+        <attribute name="songID" attributeType="String"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="artist" attributeType="String"/>
+        <attribute name="album" attributeType="String"/>
+        <attribute name="albumID" attributeType="String"/>
+        <attribute name="artistID" attributeType="String"/>
+        <attribute name="artworkURL" optional="YES" attributeType="String"/>
+        <attribute name="duration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="releaseDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    
+    <!-- AlbumMetadata Entity -->
+    <entity name="AlbumMetadata" representedClassName="AlbumMetadata" syncable="YES">
+        <attribute name="albumID" attributeType="String"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="artist" attributeType="String"/>
+        <attribute name="artistID" attributeType="String"/>
+        <attribute name="artworkURL" optional="YES" attributeType="String"/>
+        <attribute name="trackCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="releaseDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    
+    <!-- ArtistMetadata Entity -->
+    <entity name="ArtistMetadata" representedClassName="ArtistMetadata" syncable="YES">
+        <attribute name="artistID" attributeType="String"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="imageURL" optional="YES" attributeType="String"/>
+        <attribute name="genres" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+    </entity>
+    
+</model>
