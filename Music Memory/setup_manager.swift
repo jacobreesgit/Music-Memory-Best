@@ -46,30 +46,30 @@ class SetupManager: ObservableObject {
         }
         
         // Initialize Core Data (already done via PersistenceController)
-        await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay for UX
+        do {
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay for UX
+        } catch {
+            print("Sleep interrupted: \(error)")
+        }
         
         await MainActor.run {
             setupStatus = "Requesting Music permissions..."
         }
         
         // Request MusicKit authorization
-        do {
-            await musicManager.requestMusicAuthorization()
-        } catch {
-            print("Error requesting music authorization: \(error)")
-        }
+        await musicManager.requestMusicAuthorization()
         
         // Request MediaPlayer library access
         await MainActor.run {
-            do {
-                musicManager.requestMediaLibraryAuthorization()
-            } catch {
-                print("Error requesting media library authorization: \(error)")
-            }
+            musicManager.requestMediaLibraryAuthorization()
         }
         
         // Wait a moment for MediaPlayer authorization
-        await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        do {
+            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        } catch {
+            print("Sleep interrupted: \(error)")
+        }
         
         await MainActor.run {
             setupStatus = "Setting up playback monitoring..."
