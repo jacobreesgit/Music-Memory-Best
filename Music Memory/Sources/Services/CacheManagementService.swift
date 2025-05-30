@@ -5,6 +5,8 @@ protocol CacheManagementServiceProtocol {
     func performFullCleanup()
     func getCacheStatistics() -> CacheStatistics
     func shouldPerformCleanup() -> Bool
+    func getCacheHealthScore() -> Double
+    func getCacheOptimizationRecommendations() -> [String]
 }
 
 struct CacheStatistics {
@@ -256,11 +258,9 @@ class CacheManagementService: CacheManagementServiceProtocol {
         
         return totalSize
     }
-}
-
-// MARK: - Extension for Additional Protocols
-
-extension CacheManagementService {
+    
+    // MARK: - Protocol Required Methods
+    
     /// Get a health score for the cache system (0.0 = unhealthy, 1.0 = perfect health)
     func getCacheHealthScore() -> Double {
         let stats = getCacheStatistics()

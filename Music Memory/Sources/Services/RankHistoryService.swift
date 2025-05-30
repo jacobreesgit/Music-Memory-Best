@@ -5,6 +5,8 @@ protocol RankHistoryServiceProtocol {
     func getRankChanges(for songs: [Song], sortDescriptor: SortDescriptor) -> [String: RankChange]
     func cleanupOldSnapshots()
     func clearAllRankHistory()
+    func getOldestSnapshotDate() -> Date?
+    func getNewestSnapshotDate() -> Date?
 }
 
 class RankHistoryService: RankHistoryServiceProtocol {

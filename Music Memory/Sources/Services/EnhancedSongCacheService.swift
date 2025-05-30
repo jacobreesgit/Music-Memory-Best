@@ -1,5 +1,6 @@
 import Foundation
 import MusicKit
+import MediaPlayer
 
 protocol EnhancedSongCacheServiceProtocol {
     func cacheEnhancedSong(_ song: Song)
@@ -52,6 +53,14 @@ class EnhancedSongCacheService: EnhancedSongCacheServiceProtocol {
     }
     
     func cacheEnhancedSong(_ song: Song) {
+        // Get disc number safely using the correct property name
+        let discNumber: Int? = {
+            if song.hasEnhancedData {
+                return song.mediaItem.value(forProperty: MPMediaItemPropertyDiscNumber) as? Int
+            }
+            return nil
+        }()
+        
         let cachedData = CachedSongData(
             id: song.id,
             title: song.title,
@@ -65,7 +74,7 @@ class EnhancedSongCacheService: EnhancedSongCacheServiceProtocol {
             enhancedReleaseDate: song.hasEnhancedData ? song.enhancedReleaseDate : nil,
             enhancedComposer: song.hasEnhancedData ? song.enhancedComposer : nil,
             enhancedTrackNumber: song.hasEnhancedData ? song.musicKitSong?.trackNumber : nil,
-            enhancedDiscNumber: song.hasEnhancedData ? song.mediaItem.value(forProperty: MPMediaItemPropertyDiscNumber) as? Int : nil,
+            enhancedDiscNumber: discNumber,
             isExplicit: song.isExplicit,
             hasEnhancedData: song.hasEnhancedData,
             artworkURL: song.enhancedArtwork?.url(width: 300, height: 300)?.absoluteString
@@ -89,7 +98,7 @@ class EnhancedSongCacheService: EnhancedSongCacheServiceProtocol {
         let key = UserDefaultsKeys.enhancedSongKey(for: songId)
         
         guard let data = userDefaults.data(forKey: key),
-              let cachedData = try? JSONDecoder().decode(CachedSongData.self, from: data) else {
+              let _ = try? JSONDecoder().decode(CachedSongData.self, from: data) else {
             return nil
         }
         

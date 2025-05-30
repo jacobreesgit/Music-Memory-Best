@@ -109,18 +109,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
-            queue: .global(qos: .utility)
+            queue: OperationQueue()
         ) { [weak self] _ in
-            self?.handleMemoryWarning()
+            DispatchQueue.global(qos: .utility).async {
+                self?.handleMemoryWarning()
+            }
         }
         
         // Handle app entering background to perform cleanup
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
-            queue: .global(qos: .utility)
+            queue: OperationQueue()
         ) { [weak self] _ in
-            self?.handleAppEnteredBackground()
+            DispatchQueue.global(qos: .utility).async {
+                self?.handleAppEnteredBackground()
+            }
         }
     }
     
