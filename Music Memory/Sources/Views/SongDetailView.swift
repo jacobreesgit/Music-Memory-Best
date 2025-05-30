@@ -21,7 +21,7 @@ struct SongDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AppSpacing.large) {
-                // Enhanced artwork view with MusicKit support
+                // Enhanced artwork view with MusicKit support and progressive loading
                 ArtworkDetailView(
                     song: viewModel.song,
                     isCurrentlyPlaying: isCurrentlyPlaying,
@@ -30,23 +30,14 @@ struct SongDetailView: View {
                 
                 // Primary song information
                 VStack(spacing: AppSpacing.small) {
-                    HStack {
-                        TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
-                            .multilineTextAlignment(.center)
-                        
-                        // Show MusicKit enhancement indicator if available
-                        if viewModel.song.hasEnhancedData {
-                            Image(systemName: "sparkles")
-                                .font(.title3)
-                                .foregroundColor(AppColors.primary)
-                                .help("Enhanced with MusicKit")
-                        }
-                    }
+                    // Song title - removed sparkles indicator
+                    TitleText(text: viewModel.song.title, weight: AppFontWeight.bold)
+                        .multilineTextAlignment(.center)
 
                     SubheadlineText(text: viewModel.song.enhancedArtist)
                     SubheadlineText(text: viewModel.song.enhancedAlbum)
                     
-                    // Explicit content indicator
+                    // Explicit content indicator (only show if explicit)
                     if viewModel.isExplicit {
                         HStack {
                             Image(systemName: "e.square.fill")
@@ -76,22 +67,6 @@ struct SongDetailView: View {
                 
                 Divider()
                     .padding(.top, AppSpacing.small)
-                
-                // Enhanced information notice if MusicKit data is available
-                if viewModel.song.hasEnhancedData {
-                    HStack {
-                        Image(systemName: "sparkles")
-                            .foregroundColor(AppColors.primary)
-                        
-                        Text("Enhanced with high-quality artwork and metadata")
-                            .font(AppFonts.caption)
-                            .foregroundColor(AppColors.secondaryText)
-                    }
-                    .padding(.horizontal, AppSpacing.medium)
-                    .padding(.vertical, AppSpacing.small)
-                    .background(AppColors.primary.opacity(0.1))
-                    .cornerRadius(AppRadius.small)
-                }
                 
                 // Detailed information sections
                 VStack(alignment: .leading, spacing: AppSpacing.medium) {
@@ -150,16 +125,12 @@ struct SongDetailView: View {
                         }
                     }
                     
-                    // Data Source Information Section
+                    // Data Source Information Section (simplified, removed enhancement status)
                     DetailSectionView(title: "Data Sources") {
                         DetailRowView(label: "Primary Data", value: "Apple Music Library")
-                        DetailRowView(label: "Enhancement Status", value: viewModel.enhancementStatus)
                         if viewModel.song.hasEnhancedData {
                             DetailRowView(label: "Enhanced Data", value: "MusicKit")
                             DetailRowView(label: "High-Quality Artwork", value: "Available")
-                            DetailRowView(label: "Enhanced Metadata", value: "Available")
-                        } else {
-                            DetailRowView(label: "Enhancement", value: "Ready for Future Enhancement")
                         }
                     }
                 }

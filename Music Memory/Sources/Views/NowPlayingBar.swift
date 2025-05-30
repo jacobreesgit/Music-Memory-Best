@@ -78,7 +78,7 @@ struct NowPlayingBar: View {
     }
     
     private var artworkView: some View {
-        // Use enhanced artwork view with MusicKit support
+        // Use enhanced artwork view with MusicKit support and progressive loading
         NowPlayingArtworkView(song: viewModel.currentSong)
     }
     
@@ -92,20 +92,12 @@ struct NowPlayingBar: View {
     
     private var songInfoView: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-            HStack(spacing: AppSpacing.tiny) {
-                Text(viewModel.title)
-                    .font(AppFonts.callout)
-                    .fontWeight(AppFontWeight.medium)
-                    .foregroundColor(AppColors.primaryText)
-                    .lineLimit(1)
-                
-                // Show MusicKit enhancement indicator if available
-                if let currentSong = viewModel.currentSong, currentSong.hasEnhancedData {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 8))
-                        .foregroundColor(AppColors.primary.opacity(0.7))
-                }
-            }
+            // Song title - removed sparkles indicator
+            Text(viewModel.title)
+                .font(AppFonts.callout)
+                .fontWeight(AppFontWeight.medium)
+                .foregroundColor(AppColors.primaryText)
+                .lineLimit(1)
             
             songSubtitleView
         }
@@ -281,6 +273,7 @@ struct NowPlayingBar: View {
         return Color(finalColor)
     }
 }
+
 
 class NowPlayingViewModel: ObservableObject {
     // Shared instance for easier access

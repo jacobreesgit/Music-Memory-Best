@@ -7,6 +7,7 @@ protocol MusicLibraryServiceProtocol {
     func requestPermission() async -> Bool
     func fetchSongs() async throws -> [Song]
     func checkPermissionStatus() async -> AppPermissionStatus
+    func enhanceSongWithMusicKit(_ song: Song) async -> Song?
 }
 
 actor MusicLibraryService: MusicLibraryServiceProtocol {
@@ -48,30 +49,30 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
             throw AppError.permissionDenied
         }
         
-        logger.log("Fetching songs with MediaPlayer and MusicKit enhancement", level: .info)
+        logger.log("Fetching songs from MediaPlayer for immediate display", level: .info)
         
-        // Get MediaPlayer songs first (primary source)
-        let mediaPlayerSongs = try await fetchMediaPlayerSongs()
-        
-        // Check if we should enhance with MusicKit
-        let musicKitStatus = MusicAuthorization.currentStatus
-        guard musicKitStatus == .authorized else {
-            logger.log("MusicKit not authorized - returning MediaPlayer songs only", level: .info)
-            return mediaPlayerSongs
+        // For progressive loading, only return MediaPlayer songs immediately
+        // MusicKit enhancement will be handled separately by the ViewModel
+        return try await fetchMediaPlayerSongs()
+    }
+    
+    // New method for individual song enhancement (used by progressive loading)
+    func enhanceSongWithMusicKit(_ song: Song) async -> Song? {
+        // Check if MusicKit is available
+        guard MusicAuthorization.currentStatus == .authorized else {
+            logger.log("MusicKit not authorized - cannot enhance song '\(song.title)'", level: .debug)
+            return nil
         }
         
-        // Check cooldown to prevent excessive API usage
-        if let lastTime = lastEnhancementTime,
-           Date().timeIntervalSince(lastTime) < enhancementCooldown {
-            logger.log("Enhancement cooldown active - returning cached results", level: .info)
-            return mediaPlayerSongs
+        // Search for the song in MusicKit
+        if let musicKitSong = await searchMusicKitSong(for: song) {
+            // Create enhanced version of the song
+            let enhancedSong = Song(from: song.mediaItem, musicKitTrack: musicKitSong)
+            logger.log("Enhanced song '\(song.title)' with MusicKit data", level: .debug)
+            return enhancedSong
         }
         
-        // Enhance songs with MusicKit data
-        let enhancedSongs = await enhanceSongsWithMusicKit(mediaPlayerSongs)
-        lastEnhancementTime = Date()
-        
-        return enhancedSongs
+        return nil
     }
     
     // MARK: - Private Methods
@@ -100,81 +101,6 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         logger.log("Fetched \(songs.count) songs from MediaPlayer", level: .info)
         
         return songs
-    }
-    
-    private func enhanceSongsWithMusicKit(_ songs: [Song]) async -> [Song] {
-        logger.log("Starting MusicKit enhancement for \(songs.count) songs", level: .info)
-        
-        var enhancedSongs: [Song] = []
-        var successCount = 0
-        var failureCount = 0
-        
-        // Process songs in batches to respect API limits
-        let batchSize = 25
-        let batches = songs.chunked(into: batchSize)
-        
-        for (batchIndex, batch) in batches.enumerated() {
-            logger.log("Processing batch \(batchIndex + 1)/\(batches.count) with \(batch.count) songs", level: .debug)
-            
-            // Process batch with rate limiting
-            let batchResults = await processSongBatch(batch)
-            enhancedSongs.append(contentsOf: batchResults.songs)
-            successCount += batchResults.successCount
-            failureCount += batchResults.failureCount
-            
-            // Rate limiting delay between batches (except for last batch)
-            if batchIndex < batches.count - 1 {
-                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms delay
-            }
-        }
-        
-        let enhancementRate = successCount > 0 ? Double(successCount) / Double(songs.count) * 100 : 0
-        logger.log("MusicKit enhancement completed: \(successCount)/\(songs.count) successful (\(String(format: "%.1f", enhancementRate))%)", level: .info)
-        
-        return enhancedSongs
-    }
-    
-    private func processSongBatch(_ songs: [Song]) async -> (songs: [Song], successCount: Int, failureCount: Int) {
-        var enhancedSongs: [Song] = []
-        var successCount = 0
-        var failureCount = 0
-        
-        // Create search requests for the batch
-        let searchTasks = songs.map { song in
-            Task {
-                await searchMusicKitSong(for: song)
-            }
-        }
-        
-        // Execute searches concurrently
-        let results = await withTaskGroup(of: (Song, MusicKit.Song?).self, returning: [(Song, MusicKit.Song?)].self) { group in
-            for (index, task) in searchTasks.enumerated() {
-                group.addTask {
-                    let musicKitSong = await task.value
-                    return (songs[index], musicKitSong)
-                }
-            }
-            
-            var results: [(Song, MusicKit.Song?)] = []
-            for await result in group {
-                results.append(result)
-            }
-            return results
-        }
-        
-        // Create enhanced songs from results
-        for (originalSong, musicKitSong) in results {
-            let enhancedSong = Song(from: originalSong.mediaItem, musicKitTrack: musicKitSong)
-            enhancedSongs.append(enhancedSong)
-            
-            if musicKitSong != nil {
-                successCount += 1
-            } else {
-                failureCount += 1
-            }
-        }
-        
-        return (songs: enhancedSongs, successCount: successCount, failureCount: failureCount)
     }
     
     private func searchMusicKitSong(for song: Song) async -> MusicKit.Song? {
@@ -301,15 +227,5 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         }
         
         return dp[m][n]
-    }
-}
-
-// MARK: - Array Extension for Batching
-
-extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        return stride(from: 0, to: count, by: size).map {
-            Array(self[$0 ..< Swift.min($0 + size, count)])
-        }
     }
 }

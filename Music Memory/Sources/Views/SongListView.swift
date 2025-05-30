@@ -52,36 +52,18 @@ struct SongRowView: View {
                     .frame(width: (index + 1) >= 1000 ? 47 : 37, alignment: .center)
                 
                 VStack(alignment: .leading, spacing: AppSpacing.tiny) {
-                    // Song title with MusicKit enhancement if available
-                    HStack(spacing: AppSpacing.tiny) {
-                        Text(song.title)
-                            .font(AppFonts.callout)
-                            .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
-                            .foregroundColor(AppColors.primaryText)
-                            .lineLimit(1)
-                        
-                        // Show MusicKit enhancement indicator if available
-                        if song.hasEnhancedData {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 8))
-                                .foregroundColor(AppColors.primary.opacity(0.7))
-                        }
-                    }
+                    // Song title - removed sparkles indicator
+                    Text(song.title)
+                        .font(AppFonts.callout)
+                        .fontWeight(isCurrentlyPlaying ? AppFontWeight.semibold : AppFontWeight.regular)
+                        .foregroundColor(AppColors.primaryText)
+                        .lineLimit(1)
 
-                    // Artist name (use enhanced artist name)
-                    HStack(spacing: AppSpacing.tiny) {
-                        Text(song.enhancedArtist)
-                            .font(AppFonts.detail)
-                            .foregroundColor(AppColors.secondaryText)
-                            .lineLimit(1)
-                        
-                        // Show explicit indicator for explicit content
-                        if song.isExplicit {
-                            Image(systemName: "e.square.fill")
-                                .font(.system(size: 8))
-                                .foregroundColor(AppColors.secondaryText.opacity(0.7))
-                        }
-                    }
+                    // Artist name (use enhanced artist name) - removed explicit indicator
+                    Text(song.enhancedArtist)
+                        .font(AppFonts.detail)
+                        .foregroundColor(AppColors.secondaryText)
+                        .lineLimit(1)
                 }
                 
                 Spacer()
@@ -151,16 +133,9 @@ struct SongListView: View {
             }
         )
         .refreshable {
-            // Add pull-to-refresh functionality to trigger MusicKit re-enhancement
+            // Trigger full reload including progressive enhancement
             Task {
                 await viewModel.loadSongs()
-            }
-        }
-        .overlay(alignment: .top) {
-            // Show enhancement status when songs are being processed
-            if viewModel.isLoading {
-                EnhancementStatusView()
-                    .padding(.top, AppSpacing.small)
             }
         }
     }
@@ -184,33 +159,6 @@ struct PlayCountView: View {
             Text("plays")
                 .font(AppFonts.detail)
                 .foregroundColor(AppColors.secondaryText)
-        }
-    }
-}
-
-// MARK: - Enhancement Status View
-
-struct EnhancementStatusView: View {
-    @State private var isAnimating = false
-    
-    var body: some View {
-        HStack(spacing: AppSpacing.small) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 12))
-                .foregroundColor(AppColors.primary)
-                .rotationEffect(.degrees(isAnimating ? 360 : 0))
-                .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: isAnimating)
-            
-            Text("Enhancing with MusicKit...")
-                .font(AppFonts.caption)
-                .foregroundColor(AppColors.secondaryText)
-        }
-        .padding(.horizontal, AppSpacing.small)
-        .padding(.vertical, AppSpacing.tiny)
-        .background(AppColors.primary.opacity(0.1))
-        .cornerRadius(AppRadius.small)
-        .onAppear {
-            isAnimating = true
         }
     }
 }

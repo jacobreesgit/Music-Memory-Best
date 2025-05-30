@@ -42,10 +42,11 @@ enum SortDirection: String, CaseIterable {
 
 class SongListViewModel: ObservableObject {
     @Published var songs: [Song] = []
-    @Published var isLoading: Bool = false
+    @Published var isLoading: Bool = false // Only for initial permission/MediaPlayer load
     @Published var permissionStatus: AppPermissionStatus = .unknown
     @Published var sortDescriptor = SortDescriptor(option: .playCount, direction: .descending)
     @Published var rankChanges: [String: RankChange] = [:]
+    @Published var enhancementProgress: EnhancementProgress = EnhancementProgress()
     
     private var allSongs: [Song] = [] // Store original unsorted songs
     private let musicLibraryService: MusicLibraryServiceProtocol
@@ -54,6 +55,9 @@ class SongListViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var isAppLaunching = true
     let errorSubject = PassthroughSubject<AppError, Never>()
+    
+    // Progressive loading subjects
+    private let songEnhancedSubject = PassthroughSubject<Song, Never>()
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
@@ -66,6 +70,7 @@ class SongListViewModel: ObservableObject {
         setupErrorHandling()
         setupPlayCompletionListener()
         setupLocalDataClearedListener()
+        setupProgressiveEnhancement()
         
         // Cleanup old snapshots on initialization (once per app launch)
         Task {
@@ -108,6 +113,36 @@ class SongListViewModel: ObservableObject {
                 self?.handleLocalDataCleared()
             }
             .store(in: &cancellables)
+    }
+    
+    private func setupProgressiveEnhancement() {
+        // Listen for individual song enhancements
+        songEnhancedSubject
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enhancedSong in
+                self?.handleSongEnhanced(enhancedSong)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleSongEnhanced(_ enhancedSong: Song) {
+        // Find and replace the song in allSongs
+        if let index = allSongs.firstIndex(where: { $0.id == enhancedSong.id }) {
+            allSongs[index] = enhancedSong
+            
+            // Re-apply sorting with the updated song
+            applySorting()
+            
+            // Update enhancement progress
+            enhancementProgress.enhancedCount += 1
+            
+            // Update NowPlayingViewModel if this is the current song
+            if NowPlayingViewModel.shared.currentSong?.id == enhancedSong.id {
+                NowPlayingViewModel.shared.updateSongsList(songs)
+            }
+            
+            logger.log("Progressive enhancement: Updated '\(enhancedSong.title)' (\(enhancementProgress.enhancedCount)/\(enhancementProgress.totalCount))", level: .debug)
+        }
     }
     
     private func handleLocalDataCleared() {
@@ -190,10 +225,10 @@ class SongListViewModel: ObservableObject {
     
     @MainActor
     func loadSongs() async {
+        // Only show loading for permission check and initial MediaPlayer fetch
         isLoading = true
-        defer { isLoading = false }
         
-        logger.log("Loading songs", level: .info)
+        logger.log("Loading songs with progressive enhancement", level: .info)
         
         do {
             // Check current permission status first
@@ -201,26 +236,34 @@ class SongListViewModel: ObservableObject {
             
             // If permission is granted, load songs
             if permissionStatus == .granted {
-                let fetchedSongs = try await musicLibraryService.fetchSongs()
+                // Step 1: Load MediaPlayer songs immediately (no loading screen)
+                let mediaPlayerSongs = try await loadMediaPlayerSongs()
                 
                 // Sync play counts only on fresh app launch
                 if isAppLaunching {
                     logger.log("App launching - syncing play counts", level: .info)
-                    for song in fetchedSongs {
+                    for song in mediaPlayerSongs {
                         song.syncPlayCounts(logger: logger)
                     }
                     isAppLaunching = false
                 }
                 
-                self.allSongs = fetchedSongs
+                // Step 2: Show MediaPlayer data immediately
+                self.allSongs = mediaPlayerSongs
                 applySorting()
+                
+                // Initialize enhancement progress
+                enhancementProgress = EnhancementProgress(totalCount: mediaPlayerSongs.count)
                 
                 // Compute initial rank changes when loading songs
                 if sortDescriptor.option == .playCount {
                     rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
                 }
                 
-                logger.log("Loaded \(fetchedSongs.count) songs successfully", level: .info)
+                // Stop loading indicator - data is now visible
+                isLoading = false
+                
+                logger.log("Loaded \(mediaPlayerSongs.count) songs from MediaPlayer - starting progressive enhancement", level: .info)
                 
                 // Initial notification to update Now Playing bar rank
                 NotificationCenter.default.post(
@@ -231,11 +274,82 @@ class SongListViewModel: ObservableObject {
                 
                 // Ensure NowPlayingViewModel has the current songs list
                 NowPlayingViewModel.shared.updateSongsList(songs)
+                
+                // Step 3: Start progressive MusicKit enhancement in background
+                Task {
+                    await startProgressiveEnhancement(songs: mediaPlayerSongs)
+                }
+            } else {
+                isLoading = false
             }
         } catch {
+            isLoading = false
             logger.log("Error loading songs: \(error.localizedDescription)", level: .error)
             handleError(error)
         }
+    }
+    
+    private func loadMediaPlayerSongs() async throws -> [Song] {
+        // This method extracts just the MediaPlayer loading logic
+        // for immediate display without MusicKit enhancement
+        guard await musicLibraryService.checkPermissionStatus() == .granted else {
+            throw AppError.permissionDenied
+        }
+        
+        // Use the MusicLibraryService but request only MediaPlayer data for immediate display
+        // We'll enhance with MusicKit progressively
+        return try await musicLibraryService.fetchSongs()
+    }
+    
+    private func startProgressiveEnhancement(songs: [Song]) async {
+        // Run MusicKit enhancement in background without blocking UI
+        logger.log("Starting progressive MusicKit enhancement for \(songs.count) songs", level: .info)
+        
+        // Process songs in smaller batches to provide more frequent updates
+        let batchSize = 10
+        let batches = songs.chunked(into: batchSize)
+        
+        for (batchIndex, batch) in batches.enumerated() {
+            logger.log("Processing enhancement batch \(batchIndex + 1)/\(batches.count) with \(batch.count) songs", level: .debug)
+            
+            // Process batch and stream results
+            await processBatchProgressively(batch)
+            
+            // Rate limiting delay between batches
+            if batchIndex < batches.count - 1 {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms delay
+            }
+        }
+        
+        await MainActor.run {
+            enhancementProgress.isComplete = true
+            logger.log("Progressive MusicKit enhancement completed: \(enhancementProgress.enhancedCount)/\(enhancementProgress.totalCount) enhanced", level: .info)
+        }
+    }
+    
+    private func processBatchProgressively(_ batch: [Song]) async {
+        // Process each song in the batch and immediately stream results
+        for song in batch {
+            if let enhancedSong = await enhanceSongWithMusicKit(song) {
+                // Stream the enhanced song immediately
+                await MainActor.run {
+                    songEnhancedSubject.send(enhancedSong)
+                }
+            } else {
+                // Even if enhancement failed, update progress
+                await MainActor.run {
+                    enhancementProgress.enhancedCount += 1
+                }
+            }
+            
+            // Small delay between individual songs to prevent overwhelming the UI
+            try? await Task.sleep(nanoseconds: 25_000_000) // 25ms delay
+        }
+    }
+    
+    private func enhanceSongWithMusicKit(_ song: Song) async -> Song? {
+        // Use the MusicLibraryService to enhance individual songs
+        return await musicLibraryService.enhanceSongWithMusicKit(song)
     }
     
     @MainActor
@@ -311,6 +425,33 @@ class SongListViewModel: ObservableObject {
             errorSubject.send(appError)
         } else {
             errorSubject.send(AppError.unknown(error))
+        }
+    }
+}
+
+// MARK: - Enhancement Progress Tracking
+
+struct EnhancementProgress {
+    var totalCount: Int = 0
+    var enhancedCount: Int = 0
+    var isComplete: Bool = false
+    
+    var progress: Double {
+        guard totalCount > 0 else { return 0 }
+        return Double(enhancedCount) / Double(totalCount)
+    }
+    
+    var isEnhancing: Bool {
+        return totalCount > 0 && enhancedCount < totalCount && !isComplete
+    }
+}
+
+// MARK: - Array Extension for Batching
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
         }
     }
 }

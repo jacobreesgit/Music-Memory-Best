@@ -36,6 +36,7 @@ struct ArtworkView: View {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                 } else if isLoading {
                     // Show subtle loading state
                     RoundedRectangle(cornerRadius: AppRadius.small)
@@ -95,6 +96,12 @@ struct ArtworkView: View {
                 startAnimation()
             }
         }
+        .onChange(of: enhancedArtwork) { oldValue, newValue in
+            // React to progressive enhancement updates
+            if newValue != nil && newValue != oldValue {
+                loadArtwork()
+            }
+        }
     }
     
     private func loadArtwork() {
@@ -111,14 +118,16 @@ struct ArtworkView: View {
         // Determine the appropriate size with 2x resolution for crisp display
         let targetSize = CGSize(width: size * 2, height: size * 2)
         
-        // Try MusicKit artwork first (higher quality)
+        // Try MusicKit artwork first (higher quality) - progressive enhancement
         if let enhancedArtwork = enhancedArtwork {
             do {
                 // MusicKit Artwork uses url(width:height:) method
                 if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
                     let (data, _) = try await URLSession.shared.data(from: artworkURL)
                     if let artworkImage = UIImage(data: data) {
-                        self.image = artworkImage
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            self.image = artworkImage
+                        }
                         return
                     }
                 }
@@ -128,13 +137,17 @@ struct ArtworkView: View {
             }
         }
         
-        // Fallback to MediaPlayer artwork
+        // Fallback to MediaPlayer artwork (immediate display)
         if let artwork = artwork {
             // Load MediaPlayer artwork on background queue to avoid blocking UI
             let mediaPlayerImage = await Task.detached {
                 artwork.image(at: targetSize)
             }.value
-            self.image = mediaPlayerImage
+            
+            // Show MediaPlayer artwork immediately if no enhanced artwork is loaded
+            if self.image == nil {
+                self.image = mediaPlayerImage
+            }
         }
         
         // If no artwork is available, image remains nil and default icon will show
@@ -189,6 +202,7 @@ struct ArtworkDetailView: View {
                         .aspectRatio(contentMode: .fit)
                         .cornerRadius(AppRadius.large)
                         .appShadow(AppShadow.medium)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.5)))
                 } else if isLoading {
                     // Show loading state for detail view
                     RoundedRectangle(cornerRadius: AppRadius.large)
@@ -257,6 +271,12 @@ struct ArtworkDetailView: View {
                 startAnimation()
             }
         }
+        .onChange(of: enhancedArtwork) { oldValue, newValue in
+            // React to progressive enhancement updates
+            if newValue != nil && newValue != oldValue {
+                loadDetailArtwork()
+            }
+        }
     }
     
     private func loadDetailArtwork() {
@@ -273,14 +293,16 @@ struct ArtworkDetailView: View {
         // High resolution for detail view (600x600)
         let targetSize = CGSize(width: 600, height: 600)
         
-        // Try MusicKit artwork first (highest quality)
+        // Try MusicKit artwork first (highest quality) - progressive enhancement
         if let enhancedArtwork = enhancedArtwork {
             do {
                 // MusicKit Artwork uses url(width:height:) method
                 if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
                     let (data, _) = try await URLSession.shared.data(from: artworkURL)
                     if let artworkImage = UIImage(data: data) {
-                        self.displayImage = artworkImage
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            self.displayImage = artworkImage
+                        }
                         return
                     }
                 }
@@ -290,9 +312,12 @@ struct ArtworkDetailView: View {
             }
         }
         
-        // Use provided artwork (from MediaPlayer)
+        // Use provided artwork (from MediaPlayer) immediately
         if let artwork = artwork {
-            self.displayImage = artwork
+            // Show MediaPlayer artwork immediately if no enhanced artwork is loaded
+            if displayImage == nil {
+                self.displayImage = artwork
+            }
         }
         
         // If no artwork is available, displayImage remains nil and default icon will show
@@ -337,6 +362,7 @@ struct NowPlayingArtworkView: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.3)))
             } else if isLoading {
                 RoundedRectangle(cornerRadius: AppRadius.small)
                     .fill(AppColors.secondaryBackground)
@@ -359,6 +385,12 @@ struct NowPlayingArtworkView: View {
         .onAppear {
             loadNowPlayingArtwork()
         }
+        .onChange(of: enhancedArtwork) { oldValue, newValue in
+            // React to progressive enhancement updates
+            if newValue != nil && newValue != oldValue {
+                loadNowPlayingArtwork()
+            }
+        }
     }
     
     private func loadNowPlayingArtwork() {
@@ -375,14 +407,16 @@ struct NowPlayingArtworkView: View {
         // Crisp size for now playing bar (90x90 for 45pt display)
         let targetSize = CGSize(width: 90, height: 90)
         
-        // Try MusicKit artwork first
+        // Try MusicKit artwork first - progressive enhancement
         if let enhancedArtwork = enhancedArtwork {
             do {
                 // MusicKit Artwork uses url(width:height:) method
                 if let artworkURL = enhancedArtwork.url(width: Int(targetSize.width), height: Int(targetSize.height)) {
                     let (data, _) = try await URLSession.shared.data(from: artworkURL)
                     if let artworkImage = UIImage(data: data) {
-                        self.image = artworkImage
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            self.image = artworkImage
+                        }
                         return
                     }
                 }
@@ -392,12 +426,16 @@ struct NowPlayingArtworkView: View {
             }
         }
         
-        // Fallback to MediaPlayer artwork
+        // Fallback to MediaPlayer artwork (immediate display)
         if let artwork = artwork {
             let mediaPlayerImage = await Task.detached {
                 artwork.image(at: targetSize)
             }.value
-            self.image = mediaPlayerImage
+            
+            // Show MediaPlayer artwork immediately if no enhanced artwork is loaded
+            if self.image == nil {
+                self.image = mediaPlayerImage
+            }
         }
     }
 }

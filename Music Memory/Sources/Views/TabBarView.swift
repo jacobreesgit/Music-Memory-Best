@@ -31,7 +31,7 @@ struct TabBarView: View {
                 // Library tab
                 NavigationStack(path: $navigationManager.songListPath) {
                     Group {
-                        // Normal flow for real device
+                        // Progressive loading flow - show content immediately when permission is granted
                         switch songListViewModel.permissionStatus {
                         case .granted:
                             SongListView(viewModel: songListViewModel)
@@ -71,6 +71,8 @@ struct TabBarView: View {
                     }
                     .overlay(
                         Group {
+                            // Only show loading overlay for initial permission/MediaPlayer load
+                            // Progressive enhancement happens in background without blocking UI
                             if songListViewModel.isLoading {
                                 LoadingView()
                             }
@@ -111,6 +113,7 @@ struct TabBarView: View {
             }
             .onChange(of: songListViewModel.songs) { oldValue, newValue in
                 // Update the NowPlayingViewModel with the current songs list whenever it changes
+                // This includes progressive updates as songs are enhanced
                 NowPlayingViewModel.shared.updateSongsList(newValue)
             }
             .alert(item: $appState.currentError) { error in
@@ -123,6 +126,7 @@ struct TabBarView: View {
                 )
             }
             .task {
+                // Start progressive loading immediately
                 await songListViewModel.loadSongs()
             }
             .onReceive(NotificationCenter.default.publisher(for: .localDataCleared)) { _ in
