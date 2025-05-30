@@ -132,12 +132,6 @@ struct SongListView: View {
                 }
             }
         )
-        .refreshable {
-            // Trigger full reload including progressive enhancement
-            Task {
-                await viewModel.loadSongs()
-            }
-        }
     }
     
     private func playSongFromQueue(_ song: Song, queue: [Song]) {

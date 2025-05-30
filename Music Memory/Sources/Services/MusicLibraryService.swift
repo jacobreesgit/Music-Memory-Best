@@ -62,7 +62,7 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
     // New method for priority-based batch enhancement
     func enhanceSongsBatch(batchSize: Int = 10) async -> [Song] {
         // Get next priority batch from the priority service
-        let songsToEnhance = await priorityService.getNextBatchForEnhancement(batchSize: batchSize)
+        let songsToEnhance = priorityService.getNextBatchForEnhancement(batchSize: batchSize)
         
         guard !songsToEnhance.isEmpty else {
             return []
@@ -73,10 +73,10 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         for song in songsToEnhance {
             if let enhancedSong = await enhanceSongWithMusicKit(song) {
                 enhancedSongs.append(enhancedSong)
-                await priorityService.markSongAsEnhanced(song.id)
+                priorityService.markSongAsEnhanced(song.id)
             } else {
                 // Mark as processed even if enhancement failed
-                await priorityService.markSongAsEnhanced(song.id)
+                priorityService.markSongAsEnhanced(song.id)
             }
             
             // Small delay between songs to prevent overwhelming the system
@@ -124,15 +124,59 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
             throw AppError.noMediaItemsFound
         }
         
+        logger.log("Found \(mediaItems.count) total media items before filtering", level: .info)
+        
+        // Filter out uploaded songs
+        let localLibrarySongs = mediaItems.filter { mediaItem in
+            let isUploaded = isUploadedSong(mediaItem)
+            
+            if isUploaded {
+                logger.log("Skipping uploaded song: '\(mediaItem.title ?? "Unknown")' by '\(mediaItem.artist ?? "Unknown")'", level: .debug)
+            }
+            
+            return !isUploaded
+        }
+        
+        logger.log("Filtered to \(localLibrarySongs.count) local library songs (skipped \(mediaItems.count - localLibrarySongs.count) uploaded songs)", level: .info)
+        
         // Convert to Song objects without MusicKit data initially
-        let songs = mediaItems.map { mediaItem in
+        let songs = localLibrarySongs.map { mediaItem in
             return Song(from: mediaItem, musicKitTrack: nil)
         }
         
-        logger.log("Fetched \(songs.count) songs from MediaPlayer", level: .info)
+        logger.log("Fetched \(songs.count) songs from MediaPlayer (excluding uploaded songs)", level: .info)
         
         return songs
     }
+    
+    // MARK: - Uploaded Song Detection
+    
+    private func isUploadedSong(_ mediaItem: MPMediaItem) -> Bool {
+        // Use only verified MediaPlayer properties that exist
+        let isCloudItem = mediaItem.value(forProperty: MPMediaItemPropertyIsCloudItem) as? Bool ?? false
+        let hasProtectedAsset = mediaItem.value(forProperty: MPMediaItemPropertyHasProtectedAsset) as? Bool ?? false
+        let assetURL = mediaItem.value(forProperty: MPMediaItemPropertyAssetURL) as? URL
+        
+        // Simple but effective detection logic:
+        // Uploaded songs are typically cloud items without DRM protection
+        let isPotentialUpload = isCloudItem && !hasProtectedAsset
+        
+        // Additional check: Local file URLs often indicate user uploads
+        let hasLocalFileURL = assetURL?.scheme == "file"
+        
+        // Enhanced detection: Cloud items with local file URLs are very likely uploads
+        let isLikelyUpload = isCloudItem && hasLocalFileURL
+        
+        let isUploadedSong = isPotentialUpload || isLikelyUpload
+        
+        if isUploadedSong {
+            logger.log("Detected uploaded song '\(mediaItem.title ?? "Unknown")': CloudItem=\(isCloudItem), Protected=\(hasProtectedAsset), AssetURL=\(assetURL?.absoluteString ?? "nil")", level: .debug)
+        }
+        
+        return isUploadedSong
+    }
+    
+    // MARK: - MusicKit Search and Matching
     
     private func searchMusicKitSong(for song: Song) async -> MusicKit.Song? {
         // Check cache first
