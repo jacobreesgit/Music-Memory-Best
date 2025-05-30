@@ -274,7 +274,6 @@ struct NowPlayingBar: View {
     }
 }
 
-
 class NowPlayingViewModel: ObservableObject {
     // Shared instance for easier access
     static let shared = NowPlayingViewModel()
@@ -301,14 +300,19 @@ class NowPlayingViewModel: ObservableObject {
     private var hasTrackedCurrentSong = false
     private var lastPlaybackPosition: TimeInterval = 0
     
+    // Non-library song detection
+    private var isCurrentSongFromLibrary = true
+    
     private var logger = Logger()
     private var cancellables = Set<AnyCancellable>()
     private var playbackTimer: Timer?
     private var artworkPersistenceService: ArtworkPersistenceServiceProtocol?
+    private var priorityService: EnhancementPriorityServiceProtocol?
     
     init() {
-        // Get artwork persistence service from DI container
+        // Get services from DI container
         artworkPersistenceService = DIContainer.shared.artworkPersistenceService
+        priorityService = DIContainer.shared.enhancementPriorityService
         
         setupObservers()
         checkCurrentlyPlaying()
@@ -401,6 +405,32 @@ class NowPlayingViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        
+        // Listen for song enhancement updates
+        NotificationCenter.default.publisher(for: .songEnhanced)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.handleSongEnhancementUpdate()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleSongEnhancementUpdate() {
+        // Refresh current song data and artwork when enhancement occurs
+        if let currentMediaItem = musicPlayer.nowPlayingItem,
+           let enhancedSong = songs.first(where: { $0.mediaItem.persistentID == currentMediaItem.persistentID }) {
+            
+            // Update current song with enhanced data
+            currentSong = enhancedSong
+            title = enhancedSong.title
+            artist = enhancedSong.enhancedArtist
+            
+            // Clear current image to force reload with enhanced artwork
+            currentImage = nil
+            updateEnhancedArtwork()
+            
+            logger.log("Updated now playing with enhanced data for '\(enhancedSong.title)'", level: .debug)
+        }
     }
     
     func checkCurrentlyPlaying() {
@@ -503,32 +533,50 @@ class NowPlayingViewModel: ObservableObject {
         let currentItem = musicPlayer.nowPlayingItem
         
         if let mediaItem = currentItem {
+            // Check if this song is in our library
+            let isInLibrary = songs.contains { $0.mediaItem.persistentID == mediaItem.persistentID }
+            isCurrentSongFromLibrary = isInLibrary
+            
             // Find the enhanced Song object from our songs list first
             if let enhancedSong = songs.first(where: { $0.mediaItem.persistentID == mediaItem.persistentID }) {
                 currentSong = enhancedSong
                 title = enhancedSong.title
                 artist = enhancedSong.enhancedArtist // Use enhanced artist name
+                
+                logger.log("Now playing (from library): '\(enhancedSong.title)' by '\(enhancedSong.enhancedArtist)'", level: .debug)
             } else {
-                // Create a basic Song object if not found in our list
+                // Create a basic Song object if not found in our list (non-library song)
                 let basicSong = Song(from: mediaItem)
                 currentSong = basicSong
                 title = basicSong.title
                 artist = basicSong.enhancedArtist
+                
+                logger.log("Now playing (NOT in library): '\(basicSong.title)' by '\(basicSong.enhancedArtist)' - needs urgent enhancement", level: .info)
             }
             
             currentArtwork = mediaItem.artwork
             
-            // Update rank based on current song
-            if let song = currentSong {
+            // Update rank based on current song (only for library songs)
+            if let song = currentSong, isCurrentSongFromLibrary {
                 updateRankForSong(song)
+            } else {
+                currentSongRank = nil // No rank for non-library songs
             }
+            
+            // Notify priority service about currently playing song (non-blocking)
+            if let song = currentSong {
+                priorityService?.setCurrentlyPlayingSong(song, isFromLibrary: isCurrentSongFromLibrary)
+            }
+            
+            // Clear current artwork to force fresh load
+            currentImage = nil
             
             // Try to load saved artwork first, then fall back to enhanced artwork loading
             if currentSong != nil {
                 loadSavedArtworkIfNeeded()
             }
             
-            // Update artwork with MusicKit enhancement
+            // Update artwork with MusicKit enhancement (especially important for non-library songs)
             updateEnhancedArtwork()
             
             isVisible = true
@@ -540,6 +588,10 @@ class NowPlayingViewModel: ObservableObject {
             currentSongRank = nil
             songStartTime = nil
             hasTrackedCurrentSong = false
+            isCurrentSongFromLibrary = true
+            
+            // Clear priority service current song (non-blocking)
+            priorityService?.setCurrentlyPlayingSong(nil, isFromLibrary: true)
         }
     }
     
@@ -557,41 +609,45 @@ class NowPlayingViewModel: ObservableObject {
     }
     
     @MainActor
-        private func loadEnhancedArtworkAsync(for song: Song) {
-            // Try MusicKit artwork first (higher quality)
-            if let enhancedArtwork = song.enhancedArtwork {
-                Task {
-                    do {
-                        // MusicKit Artwork uses url(width:height:) method to get URL, then fetch data
-                        if let artworkURL = enhancedArtwork.url(width: 90, height: 90) {
-                            let (data, _) = try await URLSession.shared.data(from: artworkURL)
-                            if let artworkImage = UIImage(data: data) {
-                                self.currentImage = artworkImage
-                                logger.log("Loaded MusicKit artwork for now playing: '\(song.title)'", level: .debug)
-                                return
-                            }
-                        }
-                    } catch {
-                        logger.log("Failed to load MusicKit artwork for now playing: \(error.localizedDescription)", level: .debug)
-                        // Fall through to MediaPlayer artwork
-                    }
-                }
-            }
-            
-            // Fallback to MediaPlayer artwork
-            if let artwork = song.artwork {
-                Task {
-                    let image = await withCheckedContinuation { continuation in
-                        DispatchQueue.global(qos: .userInitiated).async {
-                            let artworkImage = artwork.image(at: CGSize(width: 90, height: 90))
-                            continuation.resume(returning: artworkImage)
+    private func loadEnhancedArtworkAsync(for song: Song) {
+        // Try MusicKit artwork first (higher quality) - especially important for non-library songs
+        if let enhancedArtwork = song.enhancedArtwork {
+            Task {
+                do {
+                    // MusicKit Artwork uses url(width:height:) method to get URL, then fetch data
+                    if let artworkURL = enhancedArtwork.url(width: 90, height: 90) {
+                        let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                        if let artworkImage = UIImage(data: data) {
+                            self.currentImage = artworkImage
+                            logger.log("Loaded MusicKit artwork for now playing: '\(song.title)'", level: .debug)
+                            return
                         }
                     }
-                    self.currentImage = image
-                    logger.log("Loaded MediaPlayer artwork for now playing: '\(song.title)'", level: .debug)
+                } catch {
+                    logger.log("Failed to load MusicKit artwork for now playing: \(error.localizedDescription)", level: .debug)
+                    // Fall through to MediaPlayer artwork
                 }
             }
         }
+        
+        // Fallback to MediaPlayer artwork
+        if let artwork = song.artwork {
+            Task {
+                let image = await withCheckedContinuation { continuation in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let artworkImage = artwork.image(at: CGSize(width: 90, height: 90))
+                        continuation.resume(returning: artworkImage)
+                    }
+                }
+                self.currentImage = image
+                logger.log("Loaded MediaPlayer artwork for now playing: '\(song.title)'", level: .debug)
+            }
+        } else if !isCurrentSongFromLibrary {
+            // For non-library songs with no artwork, we should show a placeholder
+            // and mark this as needing urgent enhancement
+            logger.log("Non-library song '\(song.title)' has no artwork - placeholder shown, enhancement needed", level: .info)
+        }
+    }
     
     func togglePlayback() {
         if musicPlayer.playbackState == .playing {

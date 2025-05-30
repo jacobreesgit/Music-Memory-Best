@@ -123,7 +123,7 @@ struct Song: Identifiable, Equatable, Hashable {
             trackNumber = "\(musicKitTrackNumber)"
             
             // Add total tracks if available
-            if let totalTracks = musicKitSong?.albumTitle {
+            if let _ = musicKitSong?.albumTitle {
                 // MusicKit doesn't directly provide total tracks, so use MediaPlayer fallback
                 if let mpTrackCount = mediaItem.value(forProperty: MPMediaItemPropertyAlbumTrackCount) as? Int {
                     trackNumber = "\(musicKitTrackNumber) of \(mpTrackCount)"

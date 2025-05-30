@@ -8,18 +8,21 @@ protocol MusicLibraryServiceProtocol {
     func fetchSongs() async throws -> [Song]
     func checkPermissionStatus() async -> AppPermissionStatus
     func enhanceSongWithMusicKit(_ song: Song) async -> Song?
+    func enhanceSongsBatch(batchSize: Int) async -> [Song]
 }
 
 actor MusicLibraryService: MusicLibraryServiceProtocol {
     private let permissionService: PermissionServiceProtocol
     private let logger: LoggerProtocol
+    private let priorityService: EnhancementPriorityServiceProtocol
     private var musicKitSearchCache: [String: MusicKit.Song] = [:]
     private var lastEnhancementTime: Date?
     private let enhancementCooldown: TimeInterval = 300 // 5 minutes between full enhancement runs
     
-    init(permissionService: PermissionServiceProtocol, logger: LoggerProtocol) {
+    init(permissionService: PermissionServiceProtocol, logger: LoggerProtocol, priorityService: EnhancementPriorityServiceProtocol) {
         self.permissionService = permissionService
         self.logger = logger
+        self.priorityService = priorityService
     }
     
     func requestPermission() async -> Bool {
@@ -52,11 +55,39 @@ actor MusicLibraryService: MusicLibraryServiceProtocol {
         logger.log("Fetching songs from MediaPlayer for immediate display", level: .info)
         
         // For progressive loading, only return MediaPlayer songs immediately
-        // MusicKit enhancement will be handled separately by the ViewModel
+        // MusicKit enhancement will be handled separately by the priority system
         return try await fetchMediaPlayerSongs()
     }
     
-    // New method for individual song enhancement (used by progressive loading)
+    // New method for priority-based batch enhancement
+    func enhanceSongsBatch(batchSize: Int = 10) async -> [Song] {
+        // Get next priority batch from the priority service
+        let songsToEnhance = await priorityService.getNextBatchForEnhancement(batchSize: batchSize)
+        
+        guard !songsToEnhance.isEmpty else {
+            return []
+        }
+        
+        var enhancedSongs: [Song] = []
+        
+        for song in songsToEnhance {
+            if let enhancedSong = await enhanceSongWithMusicKit(song) {
+                enhancedSongs.append(enhancedSong)
+                await priorityService.markSongAsEnhanced(song.id)
+            } else {
+                // Mark as processed even if enhancement failed
+                await priorityService.markSongAsEnhanced(song.id)
+            }
+            
+            // Small delay between songs to prevent overwhelming the system
+            try? await Task.sleep(nanoseconds: 25_000_000) // 25ms delay
+        }
+        
+        logger.log("Enhanced batch: \(enhancedSongs.count)/\(songsToEnhance.count) successful", level: .debug)
+        return enhancedSongs
+    }
+    
+    // Individual song enhancement method (preserved for specific use cases)
     func enhanceSongWithMusicKit(_ song: Song) async -> Song? {
         // Check if MusicKit is available
         guard MusicAuthorization.currentStatus == .authorized else {

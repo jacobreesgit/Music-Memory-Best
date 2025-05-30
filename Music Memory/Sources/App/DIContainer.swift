@@ -11,6 +11,7 @@ class DIContainer: ObservableObject {
     let artworkPersistenceService: ArtworkPersistenceServiceProtocol
     let appLifecycleManager: AppLifecycleManager
     let settingsService: SettingsServiceProtocol
+    let enhancementPriorityService: EnhancementPriorityServiceProtocol
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
@@ -21,7 +22,8 @@ class DIContainer: ObservableObject {
         rankHistoryService: RankHistoryServiceProtocol,
         artworkPersistenceService: ArtworkPersistenceServiceProtocol,
         appLifecycleManager: AppLifecycleManager,
-        settingsService: SettingsServiceProtocol
+        settingsService: SettingsServiceProtocol,
+        enhancementPriorityService: EnhancementPriorityServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.permissionService = permissionService
@@ -32,18 +34,23 @@ class DIContainer: ObservableObject {
         self.artworkPersistenceService = artworkPersistenceService
         self.appLifecycleManager = appLifecycleManager
         self.settingsService = settingsService
+        self.enhancementPriorityService = enhancementPriorityService
     }
     
     // Factory method for production
     static func production() -> DIContainer {
         let logger = Logger()
         let permissionService = PermissionService()
-        let musicLibraryService = MusicLibraryService(
-            permissionService: permissionService,
-            logger: logger
-        )
         let rankHistoryService = RankHistoryService(logger: logger)
         let artworkPersistenceService = ArtworkPersistenceService(logger: logger)
+        let enhancementPriorityService = EnhancementPriorityService(logger: logger)
+        
+        let musicLibraryService = MusicLibraryService(
+            permissionService: permissionService,
+            logger: logger,
+            priorityService: enhancementPriorityService
+        )
+        
         let settingsService = SettingsService(
             logger: logger,
             artworkPersistenceService: artworkPersistenceService,
@@ -65,7 +72,8 @@ class DIContainer: ObservableObject {
             rankHistoryService: rankHistoryService,
             artworkPersistenceService: artworkPersistenceService,
             appLifecycleManager: appLifecycleManager,
-            settingsService: settingsService
+            settingsService: settingsService,
+            enhancementPriorityService: enhancementPriorityService
         )
     }
     

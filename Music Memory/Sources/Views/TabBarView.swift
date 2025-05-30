@@ -10,11 +10,12 @@ struct TabBarView: View {
     @State private var selectedTab = 0
     
     init() {
-        // Use updated view model with rank history service
+        // Use updated view model with priority service
         _songListViewModel = StateObject(wrappedValue: SongListViewModel(
             musicLibraryService: DIContainer.shared.musicLibraryService,
             logger: DIContainer.shared.logger,
-            rankHistoryService: DIContainer.shared.rankHistoryService
+            rankHistoryService: DIContainer.shared.rankHistoryService,
+            priorityService: DIContainer.shared.enhancementPriorityService
         ))
         
         // Initialize settings view model
@@ -34,7 +35,17 @@ struct TabBarView: View {
                         // Progressive loading flow - show content immediately when permission is granted
                         switch songListViewModel.permissionStatus {
                         case .granted:
-                            SongListView(viewModel: songListViewModel)
+                            VStack {
+                                SongListView(viewModel: songListViewModel)
+                                
+                                // Show enhancement progress for debugging/transparency
+                                if songListViewModel.enhancementProgress.isEnhancing {
+                                    EnhancementProgressView(
+                                        progress: songListViewModel.enhancementProgress,
+                                        stats: songListViewModel.enhancementStats
+                                    )
+                                }
+                            }
                         case .denied:
                             PermissionDeniedView(
                                 onRetry: { Task { await songListViewModel.requestPermission() } }
@@ -187,6 +198,81 @@ struct SortMenuView: View {
                     .font(.system(size: 14))
             }
             .foregroundColor(AppColors.primary)
+        }
+    }
+}
+
+// MARK: - Enhancement Progress View
+
+struct EnhancementProgressView: View {
+    let progress: EnhancementProgress
+    let stats: EnhancementStats
+    
+    var body: some View {
+        VStack(spacing: AppSpacing.tiny) {
+            HStack {
+                Text("Smart Enhancement")
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.secondaryText)
+                
+                Spacer()
+                
+                Text("\(progress.enhancedCount)/\(progress.totalCount)")
+                    .font(AppFonts.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(AppColors.primaryText)
+            }
+            
+            ProgressView(value: progress.progress)
+                .progressViewStyle(LinearProgressViewStyle(tint: AppColors.primary))
+                .scaleEffect(y: 0.5)
+            
+            // Priority breakdown (only show if there are queued items)
+            if stats.queuedSongs > 0 {
+                HStack(spacing: AppSpacing.small) {
+                    if stats.urgentRemaining > 0 {
+                        PriorityIndicator(count: stats.urgentRemaining, color: .red, label: "Urgent")
+                    }
+                    if stats.highRemaining > 0 {
+                        PriorityIndicator(count: stats.highRemaining, color: .orange, label: "High")
+                    }
+                    if stats.mediumRemaining > 0 {
+                        PriorityIndicator(count: stats.mediumRemaining, color: .yellow, label: "Medium")
+                    }
+                    if stats.lowRemaining > 0 {
+                        PriorityIndicator(count: stats.lowRemaining, color: .blue, label: "Low")
+                    }
+                    if stats.backgroundRemaining > 0 {
+                        PriorityIndicator(count: stats.backgroundRemaining, color: .gray, label: "Background")
+                    }
+                    
+                    Spacer()
+                }
+            }
+        }
+        .padding(.horizontal, AppSpacing.medium)
+        .padding(.vertical, AppSpacing.small)
+        .background(AppColors.secondaryBackground)
+        .cornerRadius(AppRadius.small)
+        .padding(.horizontal, AppSpacing.medium)
+        .padding(.bottom, AppSpacing.small)
+    }
+}
+
+struct PriorityIndicator: View {
+    let count: Int
+    let color: Color
+    let label: String
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            
+            Text("\(count)")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(AppColors.secondaryText)
         }
     }
 }

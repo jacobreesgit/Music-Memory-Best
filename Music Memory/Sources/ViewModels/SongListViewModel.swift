@@ -47,30 +47,39 @@ class SongListViewModel: ObservableObject {
     @Published var sortDescriptor = SortDescriptor(option: .playCount, direction: .descending)
     @Published var rankChanges: [String: RankChange] = [:]
     @Published var enhancementProgress: EnhancementProgress = EnhancementProgress()
+    @Published var enhancementStats: EnhancementStats = EnhancementStats(totalSongs: 0, enhancedSongs: 0, queuedSongs: 0, urgentRemaining: 0, highRemaining: 0, mediumRemaining: 0, lowRemaining: 0, backgroundRemaining: 0)
     
     private var allSongs: [Song] = [] // Store original unsorted songs
     private let musicLibraryService: MusicLibraryServiceProtocol
     private let logger: LoggerProtocol
     private let rankHistoryService: RankHistoryServiceProtocol
+    private let priorityService: EnhancementPriorityServiceProtocol
     private var cancellables = Set<AnyCancellable>()
     private var isAppLaunching = true
     let errorSubject = PassthroughSubject<AppError, Never>()
     
-    // Progressive loading subjects
-    private let songEnhancedSubject = PassthroughSubject<Song, Never>()
+    // Enhancement control
+    private var enhancementTask: Task<Void, Never>?
+    private var appIdleTimer: Timer?
+    private var statsUpdateTimer: Timer?
     
     init(
         musicLibraryService: MusicLibraryServiceProtocol,
         logger: LoggerProtocol,
-        rankHistoryService: RankHistoryServiceProtocol
+        rankHistoryService: RankHistoryServiceProtocol,
+        priorityService: EnhancementPriorityServiceProtocol
     ) {
         self.musicLibraryService = musicLibraryService
         self.logger = logger
         self.rankHistoryService = rankHistoryService
+        self.priorityService = priorityService
         setupErrorHandling()
         setupPlayCompletionListener()
         setupLocalDataClearedListener()
-        setupProgressiveEnhancement()
+        setupAppLifecycleObservers()
+        
+        // Start periodic stats updates
+        startStatsUpdateTimer()
         
         // Cleanup old snapshots on initialization (once per app launch)
         Task {
@@ -78,6 +87,12 @@ class SongListViewModel: ObservableObject {
                 rankHistoryService.cleanupOldSnapshots()
             }
         }
+    }
+    
+    deinit {
+        enhancementTask?.cancel()
+        appIdleTimer?.invalidate()
+        statsUpdateTimer?.invalidate()
     }
     
     private func setupErrorHandling() {
@@ -115,33 +130,59 @@ class SongListViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
-    private func setupProgressiveEnhancement() {
-        // Listen for individual song enhancements
-        songEnhancedSubject
-            .receive(on: RunLoop.main)
-            .sink { [weak self] enhancedSong in
-                self?.handleSongEnhanced(enhancedSong)
+    private func setupAppLifecycleObservers() {
+        // Monitor app state for idle detection
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                self?.handleAppBecameActive()
+            }
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                self?.handleAppEnteredBackground()
             }
             .store(in: &cancellables)
     }
     
-    private func handleSongEnhanced(_ enhancedSong: Song) {
-        // Find and replace the song in allSongs
-        if let index = allSongs.firstIndex(where: { $0.id == enhancedSong.id }) {
-            allSongs[index] = enhancedSong
+    private func startStatsUpdateTimer() {
+        // Update stats every 2 seconds when enhancing
+        statsUpdateTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.enhancementProgress.isEnhancing else { return }
             
-            // Re-apply sorting with the updated song
-            applySorting()
-            
-            // Update enhancement progress
-            enhancementProgress.enhancedCount += 1
-            
-            // Update NowPlayingViewModel if this is the current song
-            if NowPlayingViewModel.shared.currentSong?.id == enhancedSong.id {
-                NowPlayingViewModel.shared.updateSongsList(songs)
+            Task { @MainActor in
+                self.enhancementStats = self.priorityService.getEnhancementStats()
             }
-            
-            logger.log("Progressive enhancement: Updated '\(enhancedSong.title)' (\(enhancementProgress.enhancedCount)/\(enhancementProgress.totalCount))", level: .debug)
+        }
+    }
+    
+    private func handleAppBecameActive() {
+        // Reset idle state
+        priorityService.setAppIdleState(false)
+        
+        // Start idle detection timer
+        startIdleDetectionTimer()
+        
+        // Resume enhancement if needed
+        resumeEnhancementIfNeeded()
+    }
+    
+    private func handleAppEnteredBackground() {
+        // Cancel enhancement task to save battery
+        enhancementTask?.cancel()
+        appIdleTimer?.invalidate()
+        
+        priorityService.setAppIdleState(false)
+    }
+    
+    private func startIdleDetectionTimer() {
+        appIdleTimer?.invalidate()
+        
+        // Consider app idle after 30 seconds of no interaction
+        appIdleTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { [weak self] _ in
+            self?.priorityService.setAppIdleState(true)
+            // Resume enhancement for background priority songs
+            self?.resumeEnhancementIfNeeded()
         }
     }
     
@@ -153,6 +194,9 @@ class SongListViewModel: ObservableObject {
         
         // Refresh the song list to reflect cleared local play counts
         applySorting()
+        
+        // Update priority service with new song states
+        priorityService.updateSongsList(allSongs)
         
         // Post notification to update Now Playing bar
         NotificationCenter.default.post(
@@ -179,7 +223,6 @@ class SongListViewModel: ObservableObject {
             logger.log("Re-sorting list after play count increment for '\(song.title)'", level: .info)
             
             // 1. ALWAYS save current state before re-sorting - this is the key fix!
-            // We need to save the snapshot regardless of single song or queue play
             rankHistoryService.saveRankSnapshot(songs: songs, sortDescriptor: sortDescriptor)
             
             // 2. Apply sorting with animation
@@ -187,17 +230,21 @@ class SongListViewModel: ObservableObject {
                 applySorting()
             }
             
-            // 3. ALWAYS compute rank changes - this ensures indicators show up
+            // 3. Update priority service with new song order (non-blocking)
+            priorityService.updateSongsList(allSongs)
+            priorityService.setCurrentSortOrder(sortDescriptor)
+            
+            // 4. ALWAYS compute rank changes - this ensures indicators show up
             rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
             
-            // 4. Post notification that songs list was updated
+            // 5. Post notification that songs list was updated
             NotificationCenter.default.post(
                 name: .songsListUpdated,
                 object: nil,
                 userInfo: [Notification.SongKeys.updatedSongs: songs]
             )
             
-            // 5. Ensure NowPlayingViewModel has the updated list
+            // 6. Ensure NowPlayingViewModel has the updated list
             NowPlayingViewModel.shared.updateSongsList(songs)
             
             // Log position change if any
@@ -211,7 +258,6 @@ class SongListViewModel: ObservableObject {
             }
         } else {
             // Even if not sorting by play count, still notify that the song list was updated
-            // so that play count displays are refreshed
             NotificationCenter.default.post(
                 name: .songsListUpdated,
                 object: nil,
@@ -228,7 +274,7 @@ class SongListViewModel: ObservableObject {
         // Only show loading for permission check and initial MediaPlayer fetch
         isLoading = true
         
-        logger.log("Loading songs with progressive enhancement", level: .info)
+        logger.log("Loading songs with optimized smart priority enhancement", level: .info)
         
         do {
             // Check current permission status first
@@ -252,8 +298,13 @@ class SongListViewModel: ObservableObject {
                 self.allSongs = mediaPlayerSongs
                 applySorting()
                 
+                // Step 3: Initialize priority service with songs and current sort order (non-blocking)
+                priorityService.updateSongsList(allSongs)
+                priorityService.setCurrentSortOrder(sortDescriptor)
+                
                 // Initialize enhancement progress
                 enhancementProgress = EnhancementProgress(totalCount: mediaPlayerSongs.count)
+                enhancementStats = priorityService.getEnhancementStats()
                 
                 // Compute initial rank changes when loading songs
                 if sortDescriptor.option == .playCount {
@@ -263,7 +314,7 @@ class SongListViewModel: ObservableObject {
                 // Stop loading indicator - data is now visible
                 isLoading = false
                 
-                logger.log("Loaded \(mediaPlayerSongs.count) songs from MediaPlayer - starting progressive enhancement", level: .info)
+                logger.log("Loaded \(mediaPlayerSongs.count) songs from MediaPlayer - starting optimized enhancement", level: .info)
                 
                 // Initial notification to update Now Playing bar rank
                 NotificationCenter.default.post(
@@ -275,10 +326,11 @@ class SongListViewModel: ObservableObject {
                 // Ensure NowPlayingViewModel has the current songs list
                 NowPlayingViewModel.shared.updateSongsList(songs)
                 
-                // Step 3: Start progressive MusicKit enhancement in background
-                Task {
-                    await startProgressiveEnhancement(songs: mediaPlayerSongs)
-                }
+                // Step 4: Start optimized enhancement in background
+                startOptimizedEnhancement()
+                
+                // Start idle detection for background priority
+                startIdleDetectionTimer()
             } else {
                 isLoading = false
             }
@@ -290,66 +342,102 @@ class SongListViewModel: ObservableObject {
     }
     
     private func loadMediaPlayerSongs() async throws -> [Song] {
-        // This method extracts just the MediaPlayer loading logic
-        // for immediate display without MusicKit enhancement
         guard await musicLibraryService.checkPermissionStatus() == .granted else {
             throw AppError.permissionDenied
         }
         
-        // Use the MusicLibraryService but request only MediaPlayer data for immediate display
-        // We'll enhance with MusicKit progressively
         return try await musicLibraryService.fetchSongs()
     }
     
-    private func startProgressiveEnhancement(songs: [Song]) async {
-        // Run MusicKit enhancement in background without blocking UI
-        logger.log("Starting progressive MusicKit enhancement for \(songs.count) songs", level: .info)
+    private func startOptimizedEnhancement() {
+        // Cancel any existing enhancement task
+        enhancementTask?.cancel()
         
-        // Process songs in smaller batches to provide more frequent updates
-        let batchSize = 10
-        let batches = songs.chunked(into: batchSize)
-        
-        for (batchIndex, batch) in batches.enumerated() {
-            logger.log("Processing enhancement batch \(batchIndex + 1)/\(batches.count) with \(batch.count) songs", level: .debug)
-            
-            // Process batch and stream results
-            await processBatchProgressively(batch)
-            
-            // Rate limiting delay between batches
-            if batchIndex < batches.count - 1 {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms delay
-            }
-        }
-        
-        await MainActor.run {
-            enhancementProgress.isComplete = true
-            logger.log("Progressive MusicKit enhancement completed: \(enhancementProgress.enhancedCount)/\(enhancementProgress.totalCount) enhanced", level: .info)
+        // Start new enhancement task with optimized prioritization
+        enhancementTask = Task {
+            await runOptimizedEnhancement()
         }
     }
     
-    private func processBatchProgressively(_ batch: [Song]) async {
-        // Process each song in the batch and immediately stream results
-        for song in batch {
-            if let enhancedSong = await enhanceSongWithMusicKit(song) {
-                // Stream the enhanced song immediately
+    private func runOptimizedEnhancement() async {
+        logger.log("Starting optimized smart priority enhancement", level: .info)
+        
+        var completedBatches = 0
+        let maxBatchesBeforeBreak = 3 // Smaller batches, more frequent breaks
+        
+        while !Task.isCancelled {
+            // Get next priority batch (non-blocking call)
+            let enhancedSongs = await musicLibraryService.enhanceSongsBatch(batchSize: 3) // Smaller batches
+            
+            if enhancedSongs.isEmpty {
+                // No more songs to enhance
                 await MainActor.run {
-                    songEnhancedSubject.send(enhancedSong)
+                    enhancementProgress.isComplete = true
+                    logger.log("Optimized smart priority enhancement completed", level: .info)
                 }
+                break
+            }
+            
+            // Update UI with enhanced songs
+            await MainActor.run {
+                updateEnhancedSongs(enhancedSongs)
+            }
+            
+            completedBatches += 1
+            
+            // Take frequent breaks to avoid blocking
+            if completedBatches >= maxBatchesBeforeBreak {
+                try? await Task.sleep(nanoseconds: 200_000_000) // 200ms break
+                completedBatches = 0
             } else {
-                // Even if enhancement failed, update progress
-                await MainActor.run {
-                    enhancementProgress.enhancedCount += 1
-                }
+                // Very short delay between batches
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms delay
             }
-            
-            // Small delay between individual songs to prevent overwhelming the UI
-            try? await Task.sleep(nanoseconds: 25_000_000) // 25ms delay
         }
     }
     
-    private func enhanceSongWithMusicKit(_ song: Song) async -> Song? {
-        // Use the MusicLibraryService to enhance individual songs
-        return await musicLibraryService.enhanceSongWithMusicKit(song)
+    private func resumeEnhancementIfNeeded() {
+        // Only resume if we're not complete and don't already have a running task
+        guard !enhancementProgress.isComplete,
+              enhancementTask?.isCancelled != false else { return }
+        
+        logger.log("Resuming optimized smart priority enhancement", level: .debug)
+        startOptimizedEnhancement()
+    }
+    
+    @MainActor
+    private func updateEnhancedSongs(_ enhancedSongs: [Song]) {
+        var hasChanges = false
+        
+        for enhancedSong in enhancedSongs {
+            // Find and replace the song in allSongs
+            if let index = allSongs.firstIndex(where: { $0.id == enhancedSong.id }) {
+                allSongs[index] = enhancedSong
+                hasChanges = true
+                
+                // Update enhancement progress
+                enhancementProgress.enhancedCount += 1
+                
+                logger.log("Smart enhancement: Updated '\(enhancedSong.title)' (\(enhancementProgress.enhancedCount)/\(enhancementProgress.totalCount))", level: .debug)
+            }
+        }
+        
+        if hasChanges {
+            // Re-apply sorting with the updated songs
+            applySorting()
+            
+            // Update enhancement stats (non-blocking)
+            enhancementStats = priorityService.getEnhancementStats()
+            
+            // Update NowPlayingViewModel if any current song was enhanced
+            if let currentSongId = NowPlayingViewModel.shared.currentSong?.id,
+               enhancedSongs.contains(where: { $0.id == currentSongId }) {
+                NowPlayingViewModel.shared.updateSongsList(songs)
+                
+                // Notify NowPlayingViewModel to refresh artwork
+                NotificationCenter.default.post(name: .songEnhanced, object: nil)
+            }
+        }
     }
     
     @MainActor
@@ -388,6 +476,14 @@ class SongListViewModel: ObservableObject {
         sortDescriptor = SortDescriptor(option: option, direction: newDirection)
         applySorting()
         
+        // Update priority service with new sort order (non-blocking)
+        priorityService.setCurrentSortOrder(sortDescriptor)
+        
+        // Update stats (non-blocking)
+        Task { @MainActor in
+            enhancementStats = priorityService.getEnhancementStats()
+        }
+        
         // Compute rank changes for the new sort option
         if sortDescriptor.option == .playCount {
             rankChanges = rankHistoryService.getRankChanges(for: songs, sortDescriptor: sortDescriptor)
@@ -398,8 +494,14 @@ class SongListViewModel: ObservableObject {
         // Update NowPlayingViewModel with the new sorted list
         NowPlayingViewModel.shared.updateSongsList(songs)
         
+        // Resume enhancement with new priorities
+        resumeEnhancementIfNeeded()
+        
+        // Reset idle timer since user interacted
+        startIdleDetectionTimer()
+        
         AppHaptics.selectionChanged()
-        logger.log("Updated sorting to \(sortDescriptor.key)", level: .info)
+        logger.log("Updated sorting to \(sortDescriptor.key) - reprioritizing enhancement queue", level: .info)
     }
     
     private func applySorting() {
@@ -454,4 +556,10 @@ extension Array {
             Array(self[$0 ..< Swift.min($0 + size, count)])
         }
     }
+}
+
+// MARK: - Notification for Song Enhancement
+
+extension NSNotification.Name {
+    static let songEnhanced = NSNotification.Name("songEnhanced")
 }
